@@ -47,6 +47,7 @@ export default function Home() {
           <a href="#features" className="hover:text-cyber-primary">Features</a>
           <a href="#paths" className="hover:text-cyber-primary">Learning Paths</a>
           <a href="#faq" className="hover:text-cyber-primary">FAQ</a>
+          <Link href="/game" className="text-cyber-secondary hover:text-cyber-primary">Game</Link>
           {user ? (
             <Link href="/dashboard" className="terminal-button">Dashboard</Link>
           ) : (
@@ -59,7 +60,7 @@ export default function Home() {
       </header>
 
       <main>
-        <section className="bg-grid-pattern bg-grid-pattern bg-cyber-bg py-24 text-center">
+        <section className="bg-grid-pattern [background-size:40px_40px] bg-cyber-bg py-24 text-center">
           <div className="mx-auto max-w-4xl px-6">
             <p className="mb-4 font-mono text-sm text-cyber-secondary">
               &gt; // educational cybersecurity simulation platform
@@ -155,7 +156,7 @@ export default function Home() {
             {[
               {
                 q: 'Is this legal?',
-                a: 'Yes. Every mission runs inside CyberVerse&apos;s own simulated environments. You never interact with real systems, networks, or third parties.',
+                a: "Yes. Every mission runs inside CyberVerse's own simulated environments. You never interact with real systems, networks, or third parties.",
               },
               {
                 q: 'Do I need prior experience?',
