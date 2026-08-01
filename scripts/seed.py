@@ -8,9 +8,9 @@ Creates the baseline content a fresh deployment needs:
 - achievements, FAQ items, encyclopedia articles, app settings
 
 Usage:
-    cd backend
-    python -m scripts.seed                # or: python scripts/seed.py
+    python scripts/seed.py
     # env: DATABASE_URL must point at the target database
+    # run from the repo root; requires backend dependencies installed
 """
 
 import asyncio

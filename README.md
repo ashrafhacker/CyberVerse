@@ -1,273 +1,188 @@
-# CyberVerse
+<p align="center">
+  <img src="docs/images/landing.png" alt="CyberVerse landing page" width="100%" />
+</p>
 
-An immersive 3D cybersecurity academy where users learn cybersecurity through fictional, isolated simulations, guided by AI, with story-driven missions, labs, and role-playing.
+<h1 align="center">🛡️ CyberVerse</h1>
 
-## 🎯 Mission
+<p align="center">
+  <strong>Learn cybersecurity through immersive, fictional simulations</strong><br />
+  Story-driven missions · gamified learning paths · AI mentor · safe training labs
+</p>
 
-CyberVerse is a production-ready educational cybersecurity simulation platform that teaches cybersecurity through safe, fictional environments designed for learning and defense.
+<p align="center">
+  <a href="https://img.shields.io/github/stars/ashrafhacker/CyberVerse"><img src="https://img.shields.io/github/stars/ashrafhacker/CyberVerse?style=for-the-badge&logo=github&color=00e5ff" alt="GitHub stars"/></a>
+  <a href="https://img.shields.io/github/forks/ashrafhacker/CyberVerse"><img src="https://img.shields.io/github/forks/ashrafhacker/CyberVerse?style=for-the-badge&logo=github&color=7c4dff" alt="GitHub forks"/></a>
+  <a href="https://img.shields.io/github/last-commit/ashrafhacker/CyberVerse"><img src="https://img.shields.io/github/last-commit/ashrafhacker/CyberVerse?style=for-the-badge&color=00e676" alt="Last commit"/></a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Next.js%2015-000000?style=for-the-badge&logo=next.js&logoColor=white" alt="Next.js"/>
+  <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI"/>
+  <img src="https://img.shields.io/badge/Python%203.12-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python"/>
+  <img src="https://img.shields.io/badge/PostgreSQL%2016-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL"/>
+  <img src="https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white" alt="Redis"/>
+  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript"/>
+  <img src="https://img.shields.io/badge/Tailwind%20CSS-38BDF8?style=for-the-badge&logo=tailwindcss&logoColor=white" alt="Tailwind"/>
+  <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker"/>
+  <img src="https://img.shields.io/badge/GitHub%20Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white" alt="CI/CD"/>
+</p>
+
+---
+
+## 🎯 What is CyberVerse?
+
+CyberVerse is a **production-ready educational platform** that turns cybersecurity learning into a game. Students level up through courses, missions, and labs inside a fully fictional, sandboxed world — guided by an AI mentor and motivated by XP, coins, streaks, and leaderboards.
+
+> 🔒 **Safety first**: every practical activity happens in CyberVerse's own simulated environments or labs you own and explicitly authorize. Real third-party systems are never targeted.
+
+## ✨ Highlights
+
+| | |
+|---|---|
+| 🎮 **Gamified learning** — XP, levels, coins, streaks, achievements, leaderboards | 🤖 **AI mentor** — adaptive tutoring, hints, explanations, decision review |
+| 📚 **Learning paths** — structured courses, modules, lessons, quizzes | 🎯 **Missions** — story-driven objectives with real validation rules |
+| 👨‍🏫 **Instructor authoring** — create courses, modules, lessons, quizzes, track student progress | 🛡️ **Safe labs** — owned + authorized targets only, full audit trail |
+| 🌐 **Neo Analysis** — a dynamic virtual internet of fictional companies that reacts to you | 🔐 **Auth & RBAC** — JWT + refresh tokens, roles from student to super admin |
+
+## 📸 Screenshots
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/images/login.png" alt="Login" width="100%" /></td>
+    <td align="center"><img src="docs/images/register.png" alt="Register" width="100%" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Login</sub></td>
+    <td align="center"><sub>Create account</sub></td>
+  </tr>
+</table>
 
 ## 🏗️ Architecture
 
-```
-CyberVerse/
-├── frontend/          # Next.js 15+ React application
-├── backend/           # FastAPI Python backend
-├── database/          # PostgreSQL schema & migrations
-├── game/              # Unreal Engine 5 game client
-├── auth/              # Authentication service
-├── admin/             # Admin portal
-├── ai/                # AI mentor & services
-├── docs/              # Documentation
-├── tests/             # Test suites
-├── scripts/           # Utility scripts
-├── devops/            # CI/CD & deployment configs
-└── docker/            # Docker configurations
-```
+<img src="docs/images/architecture.svg" alt="CyberVerse architecture" width="100%" />
 
-## 🛠️ Technology Stack
+## 🛠️ Tech Stack
 
-### Frontend
-- Next.js 15+ (App Router)
-- React 19
-- TypeScript
-- Tailwind CSS
-- Framer Motion
-- PWA Support
-
-### Backend
-- FastAPI
-- Python 3.12+
-- SQLAlchemy 2.0 (Async)
-- Alembic (Migrations)
-- Redis (Caching/Sessions)
-- Celery (Background Jobs)
-
-### Database
-- PostgreSQL 16 (Supabase)
-
-### Authentication
-- JWT + Refresh Tokens
-- OAuth (Google, GitHub)
-- 2FA (TOTP)
-- Device Session Management
-
-### Infrastructure
-- Frontend: Vercel
-- Backend: Render
-- Database: Supabase PostgreSQL
-- Auth: Supabase Auth
-- Storage: Supabase Storage
-- Containerization: Docker
-- CI/CD: GitHub Actions
+| Layer | Technology |
+|---|---|
+| **Frontend** | Next.js 15 (App Router) · React 19 · TypeScript · Tailwind CSS · Framer Motion |
+| **Backend** | FastAPI · Python 3.12 · SQLAlchemy 2.0 (async) · Pydantic v2 |
+| **Database** | PostgreSQL 16 · Alembic migrations |
+| **Async** | Redis 7 (cache, sessions, rate limits) · Celery (emails, notifications, analytics) |
+| **Auth** | JWT access + refresh tokens · RBAC · 2FA-ready · device sessions |
+| **Infra** | Docker Compose · Caddy · GitHub Actions · Vercel (frontend) · Render (backend) |
 
 ## 🚀 Quick Start
 
-### Prerequisites
-- Node.js 20+
-- Python 3.12+
-- PostgreSQL 16+
-- Docker & Docker Compose
-
-### Development Setup
+**Prerequisites:** Node.js 22+, Python 3.12+, Docker + Docker Compose.
 
 ```bash
-# Clone repository
-git clone https://github.com/yourorg/cyberverse.git
-cd CyberVerse
+# 1. Infrastructure (PostgreSQL + Redis)
+docker compose -f docker/docker-compose.dev.yml up -d postgres redis
 
-# Start development environment
-docker-compose -f docker/docker-compose.dev.yml up -d
+# 2. Backend
+cd backend
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env             # set SECRET_KEY + JWT_SECRET_KEY (min 32 chars)
+alembic upgrade head             # apply migrations
 
-# Install frontend dependencies
-cd frontend && npm install
+# 3. Seed baseline content (admin: admin@cyberverse.io / ChangeMe123!)
+cd ..
+python scripts/seed.py
 
-# Install backend dependencies
-cd ../backend && pip install -e .
+# 4. Run the backend (terminal 1)
+cd backend
+uvicorn app.main:app --reload    # http://localhost:8000/docs
 
-# Run database migrations
-cd ../backend && alembic upgrade head
-
-# Start development servers
-# Terminal 1: Frontend
-cd frontend && npm run dev
-
-# Terminal 2: Backend
-cd backend && uvicorn app.main:app --reload
+# 5. Run the frontend (terminal 2)
+cd frontend
+npm install
+npm run dev                      # http://localhost:3000
 ```
+
+Or run the whole stack with Docker: `docker compose -f docker/docker-compose.dev.yml up -d`
 
 ## 📦 Project Structure
 
-### Frontend (`/frontend`)
 ```
-frontend/
-├── src/
-│   ├── app/                    # Next.js App Router pages
-│   │   ├── (auth)/            # Auth layout group
-│   │   ├── (dashboard)/       # Dashboard layout group
-│   │   ├── (admin)/           # Admin layout group
-│   │   ├── (instructor)/      # Instructor layout group
-│   │   └── api/               # API routes
-│   ├── components/            # React components
-│   │   ├── ui/               # Base UI components
-│   │   ├── forms/            # Form components
-│   │   ├── charts/           # Chart components
-│   │   └── layout/           # Layout components
-│   ├── lib/                   # Utilities & configurations
-│   ├── hooks/                 # Custom React hooks
-│   ├── store/                 # State management (Zustand)
-│   ├── types/                 # TypeScript types
-│   └── styles/                # Global styles
-├── public/                    # Static assets
-└── tests/                     # Frontend tests
+CyberVerse/
+├── backend/            # FastAPI application
+│   ├── app/
+│   │   ├── api/v1/     # Endpoints: auth, courses, missions, progress, admin, instructor…
+│   │   ├── core/       # Config, security, database, redis, celery, logging
+│   │   ├── models/     # SQLAlchemy models (19 tables)
+│   │   ├── schemas/    # Pydantic schemas
+│   │   ├── services/   # Business logic
+│   │   └── tasks/      # Celery tasks
+│   ├── alembic/        # Migrations
+│   └── tests/          # pytest suite (Postgres-backed)
+├── frontend/           # Next.js 15 application
+│   ├── app/            # Pages: dashboard, courses, missions, leaderboard, profile, admin…
+│   ├── components/     # UI components (+ unit tests)
+│   └── lib/            # API client, auth provider, types
+├── database/           # Bootstrap schema
+├── docker/             # Dockerfiles + compose (dev/prod)
+├── devops/             # CI/CD + Caddy config
+├── docs/               # Architecture, API, security, deployment docs
+└── scripts/            # seed.py and utilities
 ```
-
-### Backend (`/backend`)
-```
-backend/
-├── app/
-│   ├── api/                   # API routes
-│   │   ├── v1/               # API v1 endpoints
-│   │   └── deps.py           # FastAPI dependencies
-│   ├── core/                  # Core configurations
-│   │   ├── config.py         # Settings management
-│   │   ├── security.py       # Security utilities
-│   │   └── database.py       # Database connection
-│   ├── models/                # SQLAlchemy models
-│   ├── schemas/               # Pydantic schemas
-│   ├── services/              # Business logic
-│   ├── repositories/          # Data access layer
-│   ├── tasks/                 # Celery tasks
-│   └── main.py               # FastAPI application
-├── alembic/                   # Database migrations
-├── tests/                     # Backend tests
-└── pyproject.toml            # Python project config
-```
-
-## 🔐 User Roles & Permissions
-
-| Role | Description | Permissions |
-|------|-------------|-------------|
-| Guest | Unauthenticated user | View public content |
-| Student | Registered learner | Access courses, missions, labs |
-| Premium Student | Paid subscriber | All student + premium content |
-| Instructor | Course creator | Create/manage content, view student progress |
-| Moderator | Community moderator | Moderate discussions, flag content |
-| Administrator | Platform admin | Full platform management |
-| Developer | Technical staff | Access dev tools, logs |
-| Super Admin | Platform owner | All permissions + system config |
-
-## 🎮 Game Features
-
-- **Story Mode**: Campaign from beginner to expert
-- **Free Roam**: Explore Cyber Academy facilities
-- **Practice Labs**: Unlimited hands-on simulations
-- **Challenge Mode**: Timed scenarios
-- **Daily/Weekly Missions**: Rotating objectives
-- **Multiplayer**: Co-op learning, instructor-led sessions
-
-## 🤖 AI System
-
-- AI Mentor: Personalized guidance & explanations
-- AI Tutor: Interactive learning assistance
-- Quiz Generator: Dynamic assessments
-- Progress Analyzer: Learning insights
-- Mission Hint System: Contextual help
-
-## 🌐 Neo Analysis Simulation System
-
-The realistic simulation layer: a complete **virtual internet** of fictional companies, infrastructure, and threat actors that react to player actions in real time.
-
-- **Virtual Internet**: banks, hospitals, data centers, airports, smart cities, and more — each with employees, email, DNS, Active Directory, logs, alerts, and backups (all fictional)
-- **Dynamic AI World**: procedurally generated companies, users, devices, incidents, and threat timelines — every playthrough is different
-- **Real Defensive Work**: investigate alerts, review logs, analyze malware in sandboxes, configure firewalls, patch systems, perform forensics, respond to incidents
-- **AI Mentor**: explains tasks, teaches concepts, reviews decisions, adapts missions to your skill
-- **Safe Training Labs**: connect your own VMs, Docker labs, or home labs with **mandatory ownership verification** and strict scope enforcement
-- **Safety First**: no arbitrary third-party targets, no real credentials, sandboxed analysis, full audit trail
-
-See [docs/neo-analysis.md](docs/neo-analysis.md) for the full design.
-
-## 📚 Learning Paths
-
-1. Cybersecurity Fundamentals
-2. Networking
-3. Linux Administration
-4. Windows Administration
-5. Programming Fundamentals (Python, JavaScript)
-6. Web Security
-7. Cloud Security
-8. Digital Forensics
-9. Incident Response
-10. Threat Hunting
-11. Security Operations
-12. Governance & Compliance
-
-## 🔒 Security Features
-
-- Zero Trust Architecture
-- End-to-end Encryption
-- Rate Limiting & DDoS Protection
-- Audit Logging
-- Automated Security Scanning
-- Regular Penetration Testing
-- GDPR/Privacy Compliance
 
 ## 🧪 Testing
 
 ```bash
-# Frontend tests
-cd frontend && npm run test        # Unit tests
-cd frontend && npm run test:e2e    # E2E tests (Playwright)
+# Backend (needs a local PostgreSQL 16)
+cd backend && pytest
 
-# Backend tests
-cd backend && pytest               # Unit & integration tests
-cd backend && pytest --cov         # With coverage
+# Frontend
+cd frontend && npm test
 ```
+
+CI runs everything on every push: lint, type checks, backend tests against a real Postgres service, 30+ frontend unit tests, Trivy + gitleaks scans.
+
+## 🌐 Neo Analysis — The Virtual Internet
+
+The flagship simulation layer: a complete **virtual internet** of fictional banks, hospitals, data centers, and smart cities — with employees, email, DNS, Active Directory, logs, alerts, and backups. Everything reacts to player actions in real time.
+
+- **Dynamic AI world** — procedurally generated companies, users, devices, and threat timelines
+- **Real defensive work** — investigate alerts, review logs, analyze malware in sandboxes, configure firewalls, patch systems, perform forensics
+- **AI mentor** — explains, teaches, and adapts missions to your skill level
+- **Safe Training Labs** — connect your own VMs or home labs after **mandatory ownership verification** and scope declaration
+
+Read the full design in [docs/neo-analysis.md](docs/neo-analysis.md).
 
 ## 📖 Documentation
 
-- [Architecture Guide](docs/architecture.md)
-- [API Documentation](docs/api.md)
-- [Database Schema](docs/database.md)
-- [Deployment Guide](docs/deployment.md)
-- [Security Guide](docs/security.md)
-- [Developer Handbook](docs/developer-guide.md)
+- [Architecture guide](docs/architecture.md)
+- [API reference](docs/api.md)
+- [Database schema](docs/database.md)
+- [Security guide](docs/security.md)
+- [Deployment guide](docs/deployment.md)
+- [Game design](docs/game-design.md)
+- [Roadmap](docs/roadmap.md)
 
-## 🚢 Deployment
+## 🗺️ Roadmap
 
-### Environments
-- **Development**: Local Docker Compose
-- **Staging**: Render + Vercel Preview
-- **Production**: Render + Vercel + Supabase
-
-### CI/CD Pipeline
-1. Lint & Type Check
-2. Unit Tests
-3. Integration Tests
-4. Build Docker Images
-5. Deploy to Staging
-6. Smoke Tests
-7. Deploy to Production (manual approval)
+| Phase | Focus |
+|---|---|
+| **v1** (current) | Learning platform core: auth, gamification, courses, missions, leaderboard |
+| **v1.5** | Instructor authoring, analytics dashboards, certificate engine |
+| **v2** | Neo Analysis virtual internet, AI mentor deep integration, safe labs |
+| **v3** | 3D game client, multiplayer co-op sessions, mobile apps |
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes
+4. Push to the branch
+5. Open a Pull Request
 
 ## 🙏 Acknowledgments
 
-- Unreal Engine 5 for 3D rendering
-- FastAPI for the backend framework
-- Next.js for the frontend framework
-- Supabase for backend services
-- All open-source contributors
+Built with FastAPI, Next.js, PostgreSQL, Redis, Celery, Tailwind CSS — and a lot of fictional sandboxes.
 
 ---
 
-**CyberVerse** - Learn Cybersecurity Through Immersive Simulation
+<p align="center"><sub>CyberVerse — Learn cybersecurity through immersive simulation.</sub></p>
