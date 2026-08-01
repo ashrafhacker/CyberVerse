@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#00e5ff" stroke-opacity="0.06"/>
+    </pattern>
+    <radialGradient id="glow" cx="50%" cy="38%" r="60%">
+      <stop offset="0%" stop-color="#00e5ff" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#00e5ff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="#070a14"/>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <rect x="60" y="60" width="1080" height="510" rx="18" fill="none" stroke="#00e5ff" stroke-opacity="0.35"/>
+  <rect x="60" y="60" width="1080" height="510" rx="18" fill="#00e5ff" fill-opacity="0.02"/>
+
+  <path d="M520 120 L620 152 V230 C620 300 590 340 570 355 C550 340 520 300 520 230 Z" fill="#0d1220" stroke="#00e5ff" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M546 220 L568 242 L600 204" fill="none" stroke="#00e5ff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <text x="600" y="268" font-size="26" fill="#7c4dff" text-anchor="middle" letter-spacing="2">&gt; // educational cybersecurity simulation platform</text>
+
+  <text x="600" y="350" font-size="64" font-weight="700" fill="#e6e9f2" text-anchor="middle">Learn Cybersecurity</text>
+  <text x="600" y="430" font-size="64" font-weight="700" fill="#00e5ff" text-anchor="middle">By Doing.</text>
+
+  <text x="600" y="490" font-size="22" fill="#8a93ab" text-anchor="middle">Missions · Learning Paths · AI Mentor · Safe Training Labs</text>
+
+  <text x="600" y="538" font-size="16" fill="#8a93ab" text-anchor="middle" opacity="0.8">free forever for learners · every activity runs in a fictional, sandboxed world</text>
+</svg>

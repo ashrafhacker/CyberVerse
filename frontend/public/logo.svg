@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 64">
+  <path d="M16 8 L48 18 V38 C48 52 36 59 32 62 C28 59 16 52 16 38 Z" fill="#0d1220" stroke="#00e5ff" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M22 30 L29 37 L41 24" fill="none" stroke="#00e5ff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="62" y="44" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="30" font-weight="700" fill="#00e5ff" letter-spacing="1">CyberVerse</text>
+</svg>
