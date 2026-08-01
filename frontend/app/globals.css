@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-cyber-bg text-cyber-text font-sans antialiased;
+  background-image: radial-gradient(ellipse at 50% -20%, rgba(124, 77, 255, 0.12), transparent 60%);
+}
+
+::selection {
+  background: rgba(0, 229, 255, 0.3);
+}
+
+@layer components {
+  .terminal-card {
+    @apply border border-cyber-border bg-cyber-surface rounded-lg;
+  }
+
+  .terminal-input {
+    @apply w-full rounded-md border border-cyber-border bg-cyber-bg px-3 py-2 text-sm text-cyber-text
+      placeholder:text-cyber-muted focus:border-cyber-primary focus:outline-none focus:ring-1 focus:ring-cyber-primary;
+  }
+
+  .terminal-button {
+    @apply rounded-md bg-cyber-primary px-4 py-2 text-sm font-semibold text-cyber-bg
+      transition-colors hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .terminal-button-ghost {
+    @apply rounded-md border border-cyber-border px-4 py-2 text-sm font-medium text-cyber-text
+      transition-colors hover:border-cyber-primary hover:text-cyber-primary;
+  }
+
+  .terminal-label {
+    @apply mb-1 block text-xs font-medium uppercase tracking-wider text-cyber-muted;
+  }
+
+  .glow-text {
+    text-shadow: 0 0 20px rgba(0, 229, 255, 0.5);
+  }
+}

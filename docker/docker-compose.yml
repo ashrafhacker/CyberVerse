@@ -1,0 +1,112 @@
+# CyberVerse production stack
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cyberverse-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cyberverse
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cyberverse}
+      POSTGRES_DB: cyberverse
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cyberverse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: cyberverse-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+    container_name: cyberverse-backend
+    restart: unless-stopped
+    env_file:
+      - ../backend/.env
+    environment:
+      DATABASE_URL: postgresql://cyberverse:${POSTGRES_PASSWORD:-cyberverse}@postgres:5432/cyberverse
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  celery-worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+    container_name: cyberverse-celery
+    restart: unless-stopped
+    command: celery -A app.core.celery_app.celery_app worker --loglevel=INFO --concurrency=4
+    env_file:
+      - ../backend/.env
+    environment:
+      DATABASE_URL: postgresql://cyberverse:${POSTGRES_PASSWORD:-cyberverse}@postgres:5432/cyberverse
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery-beat:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+    container_name: cyberverse-beat
+    restart: unless-stopped
+    command: celery -A app.core.celery_app.celery_app beat --loglevel=INFO
+    env_file:
+      - ../backend/.env
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
+    container_name: cyberverse-frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+  redis_data:

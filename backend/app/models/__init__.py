@@ -1,0 +1,88 @@
+from app.models.user import User, UserRole, UserStatus, AuthProvider, Profile
+from app.models.session import Session, LoginHistory, AuditLog, Device
+from app.models.course import (
+    LearningPath,
+    Course,
+    Module,
+    Lesson,
+    Quiz,
+    QuizQuestion,
+    QuizAttempt,
+)
+from app.models.mission import (
+    Mission,
+    MissionObjective,
+    MissionProgress,
+    ObjectiveProgress,
+    MissionReward,
+)
+from app.models.progress import PlayerProgress, LessonProgress, Enrollment, LearningStreak
+from app.models.achievement import Achievement, UserAchievement, DailyChallenge, WeeklyChallenge
+from app.models.certificate import Certificate, CertificateTemplate
+from app.models.notification import Notification, Announcement
+from app.models.social import Friend, Team, TeamMember, ChatMessage
+from app.models.premium import SubscriptionPlan, Subscription, Payment, Coupon
+from app.models.support import SupportTicket, TicketMessage, FAQItem
+from app.models.analytics import (
+    Leaderboard,
+    LeaderboardEntry,
+    InventoryItem,
+    AppSetting,
+    FeatureFlag,
+    AnalyticsEvent,
+    CyberEncyclopediaArticle,
+)
+
+__all__ = [
+    "User",
+    "UserRole",
+    "UserStatus",
+    "AuthProvider",
+    "Profile",
+    "Session",
+    "LoginHistory",
+    "AuditLog",
+    "Device",
+    "LearningPath",
+    "Course",
+    "Module",
+    "Lesson",
+    "Quiz",
+    "QuizQuestion",
+    "QuizAttempt",
+    "Mission",
+    "MissionObjective",
+    "MissionProgress",
+    "ObjectiveProgress",
+    "MissionReward",
+    "PlayerProgress",
+    "LessonProgress",
+    "Enrollment",
+    "LearningStreak",
+    "Achievement",
+    "UserAchievement",
+    "DailyChallenge",
+    "WeeklyChallenge",
+    "Certificate",
+    "CertificateTemplate",
+    "Notification",
+    "Announcement",
+    "Friend",
+    "Team",
+    "TeamMember",
+    "ChatMessage",
+    "SubscriptionPlan",
+    "Subscription",
+    "Payment",
+    "Coupon",
+    "SupportTicket",
+    "TicketMessage",
+    "FAQItem",
+    "Leaderboard",
+    "LeaderboardEntry",
+    "InventoryItem",
+    "AppSetting",
+    "FeatureFlag",
+    "AnalyticsEvent",
+    "CyberEncyclopediaArticle",
+]
