@@ -19,6 +19,8 @@ from app.api.v1.endpoints import (
     analytics,
     support,
     library,
+    media,
+    labs,
 )
 
 api_router = APIRouter()
@@ -41,3 +43,5 @@ api_router.include_router(premium.router, prefix="/premium", tags=["Premium"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["Analytics"])
 api_router.include_router(support.router, prefix="/support", tags=["Support"])
 api_router.include_router(library.router, prefix="/library", tags=["Library"])
+api_router.include_router(media.router, prefix="/media", tags=["Media"])
+api_router.include_router(labs.router, prefix="/labs", tags=["CyberVerse Labs"])

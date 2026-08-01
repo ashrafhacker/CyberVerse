@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Shield, LayoutDashboard, BookOpen, Swords, Trophy, User, LogOut, Settings } from 'lucide-react';
+import { Shield, LayoutDashboard, BookOpen, Swords, Trophy, User, LogOut, Settings, FlaskConical } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import type { UserRole } from '@/lib/types';
@@ -39,6 +39,7 @@ export default function Navbar() {
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/courses', label: 'Courses', icon: BookOpen },
     { href: '/missions', label: 'Missions', icon: Swords },
+    { href: '/labs', label: 'Labs', icon: FlaskConical },
     { href: '/leaderboard', label: 'Leaderboard', icon: Trophy },
     { href: '/profile', label: 'Profile', icon: User },
     ...(user.role && INSTRUCTOR_ROLES.includes(user.role)

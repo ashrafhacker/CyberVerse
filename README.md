@@ -162,6 +162,8 @@ Read the full design in [docs/neo-analysis.md](docs/neo-analysis.md).
 - [Security guide](docs/security.md)
 - [Deployment guide](docs/deployment.md)
 - [Game design](docs/game-design.md)
+- [CyberVerse Labs](docs/cyberverse-labs.md)
+- [CyberVerse Labs API](docs/cyberverse-labs-api.md)
 - [Roadmap](docs/roadmap.md)
 
 ## 🗺️ Roadmap

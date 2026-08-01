@@ -117,12 +117,14 @@ export default function CourseDetailPage() {
                   <ul className="space-y-1">
                     {mod.lessons.map((lesson) => (
                       <li key={lesson.id}>
-                        <button
-                          className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-cyber-bg/60"
-                          title="Lesson player coming soon"
+                        <a
+                          href={`/courses/${id}/lessons/${lesson.id}`}
+                          className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-cyber-primary/10 hover:text-cyber-primary"
                         >
                           <span className="flex items-center gap-2">
-                            <Lock className="h-4 w-4 text-cyber-muted" />
+                            {lesson.lesson_type === 'pdf'
+                              ? <span className="text-cyber-secondary">📄</span>
+                              : <span className="text-cyber-primary">▶</span>}
                             {lesson.order}. {lesson.name}
                             {lesson.is_premium && (
                               <span className="rounded bg-cyber-warning/20 px-1.5 py-0.5 text-xs text-cyber-warning">premium</span>
@@ -131,7 +133,7 @@ export default function CourseDetailPage() {
                           <span className="font-mono text-xs text-cyber-muted">
                             {lesson.estimated_minutes}m · +{lesson.xp_reward} XP
                           </span>
-                        </button>
+                        </a>
                       </li>
                     ))}
                   </ul>

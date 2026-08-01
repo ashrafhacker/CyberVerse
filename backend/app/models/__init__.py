@@ -33,6 +33,19 @@ from app.models.analytics import (
     CyberEncyclopediaArticle,
 )
 from app.models.library import LibraryResource, ResourceType
+from app.models.lab import (
+    LabFacility,
+    LabMissionTemplate,
+    LabScenarioInstance,
+    LabSession,
+    LabEvent,
+    LabEvidenceItem,
+    LabNote,
+    LabReport,
+    LabHomeAttestation,
+    LabHomeProfile,
+    LabAuditLog,
+)
 
 __all__ = [
     "User",
@@ -88,4 +101,15 @@ __all__ = [
     "CyberEncyclopediaArticle",
     "LibraryResource",
     "ResourceType",
+    "LabFacility",
+    "LabMissionTemplate",
+    "LabScenarioInstance",
+    "LabSession",
+    "LabEvent",
+    "LabEvidenceItem",
+    "LabNote",
+    "LabReport",
+    "LabHomeAttestation",
+    "LabHomeProfile",
+    "LabAuditLog",
 ]

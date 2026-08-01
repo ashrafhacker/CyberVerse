@@ -51,8 +51,9 @@ export interface AuthTokens {
 
 export interface APIResponse<T> {
   success: boolean;
-  message: string;
-  data: T;
+  message?: string;
+  data?: T;
+  error?: string;
 }
 
 export interface PaginatedResponse<T> {
@@ -164,4 +165,56 @@ export interface PlayerProgress {
   learning_streak: number;
   longest_streak: number;
   time_spent_seconds: number;
+}
+
+export interface LabFacility {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  facility_type: string;
+  min_level: number;
+  ue5_map_name?: string | null;
+  unlocked: boolean;
+}
+
+export interface LabMission {
+  id: string;
+  facility_id: string;
+  slug: string;
+  title: string;
+  mission_type: string;
+  difficulty: string;
+  estimated_minutes: number;
+  story_context: string;
+  objectives: Array<Record<string, unknown>>;
+  tools: Array<Record<string, unknown>>;
+}
+
+export interface LabSession {
+  id: string;
+  status: string;
+  mode: string;
+  mentor_level: string;
+  current_facility_slug: string;
+  score?: number | null;
+  xp_awarded: number;
+  coins_awarded: number;
+  started_at: string;
+  completed_at?: string | null;
+}
+
+export interface LabWorld {
+  session_id: string;
+  scenario_seed: string;
+  facility: string;
+  company: Record<string, unknown>;
+  topology: Record<string, unknown>;
+  assets: Array<Record<string, unknown>>;
+  identities: Array<Record<string, unknown>>;
+  alerts: Array<Record<string, unknown>>;
+  evidence: Array<Record<string, unknown>>;
+  objectives: Array<Record<string, unknown>>;
+  tool_manifest: Array<Record<string, unknown>>;
+  safety_metadata: Record<string, unknown>;
 }

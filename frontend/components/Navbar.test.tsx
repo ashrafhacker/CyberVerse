@@ -48,9 +48,11 @@ beforeEach(() => {
 });
 
 describe('Navbar', () => {
-  it('renders nothing when logged out', () => {
+  it('shows minimal nav when logged out', () => {
     render(<Navbar />);
-    expect(document.querySelector('header')).not.toBeInTheDocument();
+    expect(document.querySelector('header')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /log in/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /dashboard/i })).not.toBeInTheDocument();
   });
 
   it('shows student navigation without admin links', () => {

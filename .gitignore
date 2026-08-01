@@ -69,3 +69,12 @@ celerybeat.pid
 *.pyo
 .vercel
 terraform.tfstate*
+
+# Course assets — large binary files served locally, not committed to git
+# Store these on the server filesystem or object storage (S3/Supabase)
+assets/courses/**/*.mp4
+assets/courses/**/*.pdf
+assets/courses/copy_log.txt
+# manifest.json IS committed (it's the index, not the files themselves)
+!assets/courses/manifest.json
+

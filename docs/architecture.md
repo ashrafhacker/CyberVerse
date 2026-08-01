@@ -90,6 +90,10 @@ cyberverse/
 - **leaderboard / analytics** — weekly rankings, admin analytics
 - **premium / support / notifications / settings / admin / instructor** — billing, tickets, alerts, config, moderation, content authoring
 
+## CyberVerse Labs Extension
+
+CyberVerse Labs is the Unreal Engine 5 training layer for realistic defensive cybersecurity practice. It adds a 3D training campus, SOC, enterprise network, digital forensics, malware analysis, cloud security, secure coding, and network defense facilities backed by generated fictional scenarios. See `docs/cyberverse-labs.md` for the UE5 implementation plan and `docs/cyberverse-labs-api.md` for the backend contract.
+
 ## Authentication Flow
 
 1. Client sends `POST /auth/login` (email + password)
