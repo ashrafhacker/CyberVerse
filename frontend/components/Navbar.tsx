@@ -14,7 +14,26 @@ export default function Navbar() {
   const { user, logout } = useAuth();
   const pathname = usePathname();
 
-  if (!user) return null;
+  if (!user) {
+    return (
+      <header className="sticky top-0 z-50 border-b border-cyber-border bg-cyber-bg/80 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
+          <Link href="/" className="flex items-center gap-2">
+            <Shield className="h-6 w-6 text-cyber-primary" />
+            <span className="font-mono font-bold text-cyber-primary">CyberVerse</span>
+          </Link>
+          <nav className="flex items-center gap-3">
+            <Link href="/courses" className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-cyber-muted hover:text-cyber-primary transition-colors">
+              <BookOpen className="h-4 w-4" />
+              <span className="hidden md:inline">Learning Paths</span>
+            </Link>
+            <Link href="/login" className="terminal-button-ghost px-4 py-2 text-sm">Log in</Link>
+            <Link href="/register" className="terminal-button px-4 py-2 text-sm">Get Started</Link>
+          </nav>
+        </div>
+      </header>
+    );
+  }
 
   const links = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },

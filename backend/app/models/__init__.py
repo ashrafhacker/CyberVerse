@@ -32,6 +32,7 @@ from app.models.analytics import (
     AnalyticsEvent,
     CyberEncyclopediaArticle,
 )
+from app.models.library import LibraryResource, ResourceType
 
 __all__ = [
     "User",
@@ -85,4 +86,6 @@ __all__ = [
     "FeatureFlag",
     "AnalyticsEvent",
     "CyberEncyclopediaArticle",
+    "LibraryResource",
+    "ResourceType",
 ]

@@ -18,6 +18,7 @@ from app.api.v1.endpoints import (
     premium,
     analytics,
     support,
+    library,
 )
 
 api_router = APIRouter()
@@ -39,3 +40,4 @@ api_router.include_router(settings_router.router, prefix="/settings", tags=["Set
 api_router.include_router(premium.router, prefix="/premium", tags=["Premium"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["Analytics"])
 api_router.include_router(support.router, prefix="/support", tags=["Support"])
+api_router.include_router(library.router, prefix="/library", tags=["Library"])

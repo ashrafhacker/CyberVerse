@@ -45,9 +45,10 @@ export default function Home() {
         </div>
         <nav className="flex items-center gap-6 text-sm text-cyber-muted">
           <a href="#features" className="hover:text-cyber-primary">Features</a>
-          <a href="#paths" className="hover:text-cyber-primary">Learning Paths</a>
+          <Link href="/courses" className="hover:text-cyber-primary">Learning Paths</Link>
           <a href="#faq" className="hover:text-cyber-primary">FAQ</a>
           <Link href="/game" className="text-cyber-secondary hover:text-cyber-primary">Game</Link>
+          <Link href="/library" className="text-cyber-secondary hover:text-cyber-primary">Library</Link>
           {user ? (
             <Link href="/dashboard" className="terminal-button">Dashboard</Link>
           ) : (

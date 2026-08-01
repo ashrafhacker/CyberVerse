@@ -149,6 +149,8 @@ The flagship simulation layer: a complete **virtual internet** of fictional bank
 - **Real defensive work** — investigate alerts, review logs, analyze malware in sandboxes, configure firewalls, patch systems, perform forensics
 - **AI mentor** — explains, teaches, and adapts missions to your skill level
 - **Safe Training Labs** — connect your own VMs or home labs after **mandatory ownership verification** and scope declaration
+- **Learning Library** — curated free courses, labs, and articles (OWASP, PortSwigger, MIT OCW, picoCTF, and more) with search, filters, and pagination
+- **Cyber Network Raid** — a browser sandbox game: scan simulated hosts, exploit weaknesses, and compromise a fictional network layer by layer
 
 Read the full design in [docs/neo-analysis.md](docs/neo-analysis.md).
 

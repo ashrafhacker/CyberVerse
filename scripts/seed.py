@@ -30,12 +30,14 @@ from app.models.analytics import AppSetting, CyberEncyclopediaArticle  # noqa: E
 from app.models.course import (  # noqa: E402
     ContentStatus,
     Course,
+    DifficultyLevel,
     Lesson,
     LearningPath,
     Module,
     Quiz,
     QuizQuestion,
 )
+from app.models.library import LibraryResource, ResourceType  # noqa: E402
 from app.models.mission import Mission, MissionObjective  # noqa: E402
 from app.models.premium import SubscriptionPlan  # noqa: E402
 from app.models.progress import PlayerProgress  # noqa: E402
@@ -520,6 +522,152 @@ async def seed_misc(db: AsyncSession) -> None:
     print("[ok] faq + encyclopedia + settings seeded")
 
 
+LIBRARY_RESOURCES = [
+    {
+        "title": "OWASP Top 10 (2021)",
+        "description": "The de-facto standard for the ten most critical web application security risks, with mitigations for each.",
+        "category": "defensive",
+        "resource_type": ResourceType.ARTICLE,
+        "difficulty": DifficultyLevel.BEGINNER,
+        "provider": "OWASP",
+        "url": "https://owasp.org/www-project-top-ten/",
+        "tags": ["web", "owasp", "vulnerabilities"],
+    },
+    {
+        "title": "PortSwigger Web Security Academy",
+        "description": "Free interactive labs and learning material covering every major web vulnerability class, from SQLi to SSRF.",
+        "category": "offensive",
+        "resource_type": ResourceType.LAB,
+        "difficulty": DifficultyLevel.INTERMEDIATE,
+        "provider": "PortSwigger",
+        "url": "https://portswigger.net/web-security",
+        "tags": ["web", "burp", "labs"],
+    },
+    {
+        "title": "MIT OCW 6.858: Computer Systems Security",
+        "description": "Full MIT course on systems security: memory safety, sandboxing, networking, and cryptography, with lectures and labs.",
+        "category": "defensive",
+        "resource_type": ResourceType.COURSE,
+        "difficulty": DifficultyLevel.ADVANCED,
+        "provider": "MIT OpenCourseWare",
+        "url": "https://ocw.mit.edu/courses/6-858-computer-systems-security-fall-2014/",
+        "tags": ["systems", "university", "course"],
+    },
+    {
+        "title": "picoCTF",
+        "description": "Free CTF challenges for beginners covering reverse engineering, forensics, web, and binary exploitation.",
+        "category": "offensive",
+        "resource_type": ResourceType.LAB,
+        "difficulty": DifficultyLevel.BEGINNER,
+        "provider": "Carnegie Mellon",
+        "url": "https://picoctf.org/",
+        "tags": ["ctf", "challenges", "beginner"],
+    },
+    {
+        "title": "TryHackMe",
+        "description": "Guided hands-on rooms and paths across offensive and defensive security, with a generous free tier.",
+        "category": "offensive",
+        "resource_type": ResourceType.COURSE,
+        "difficulty": DifficultyLevel.BEGINNER,
+        "provider": "TryHackMe",
+        "url": "https://tryhackme.com/",
+        "tags": ["labs", "hands-on", "paths"],
+    },
+    {
+        "title": "OverTheWire: Bandit",
+        "description": "A wargame that teaches the Linux command line and basic security concepts one challenge at a time.",
+        "category": "networking",
+        "resource_type": ResourceType.LAB,
+        "difficulty": DifficultyLevel.BEGINNER,
+        "provider": "OverTheWire",
+        "url": "https://overthewire.org/wargames/bandit/",
+        "tags": ["linux", "wargame", "cli"],
+    },
+    {
+        "title": "OWASP Juice Shop",
+        "description": "A deliberately vulnerable web application for practicing exploits safely, with a companion guide.",
+        "category": "offensive",
+        "resource_type": ResourceType.TOOL,
+        "difficulty": DifficultyLevel.INTERMEDIATE,
+        "provider": "OWASP",
+        "url": "https://owasp.org/www-project-juice-shop/",
+        "tags": ["web", "vulnerable-app", "practice"],
+    },
+    {
+        "title": "Professor Messer: Security+ SY0-701",
+        "description": "Free, comprehensive video course covering the full CompTIA Security+ syllabus — a solid career foundation.",
+        "category": "career",
+        "resource_type": ResourceType.VIDEO,
+        "difficulty": DifficultyLevel.BEGINNER,
+        "provider": "Professor Messer",
+        "url": "https://www.professormesser.com/security-plus/sy0-701-security-plus/",
+        "duration_minutes": 2400,
+        "tags": ["certification", "comptia", "videos"],
+    },
+    {
+        "title": "OpenSecurityTraining2",
+        "description": "Free, university-grade security courses on reverse engineering, exploit development, and low-level systems.",
+        "category": "offensive",
+        "resource_type": ResourceType.COURSE,
+        "difficulty": DifficultyLevel.ADVANCED,
+        "provider": "OpenSecurityTraining2",
+        "url": "https://opensecuritytraining.info/",
+        "tags": ["reverse-engineering", "exploitation", "deep-dive"],
+    },
+    {
+        "title": "CyberDefenders",
+        "description": "Free blue-team CTFs and training focused on digital forensics and incident response.",
+        "category": "defensive",
+        "resource_type": ResourceType.LAB,
+        "difficulty": DifficultyLevel.INTERMEDIATE,
+        "provider": "CyberDefenders",
+        "url": "https://cyberdefenders.org/",
+        "tags": ["forensics", "blue-team", "dfir"],
+    },
+    {
+        "title": "Cisco Networking Academy",
+        "description": "Free enrollment in industry-standard networking courses — the classic path into network security.",
+        "category": "networking",
+        "resource_type": ResourceType.COURSE,
+        "difficulty": DifficultyLevel.BEGINNER,
+        "provider": "Cisco",
+        "url": "https://www.netacad.com/",
+        "tags": ["networking", "cisco", "ccna"],
+    },
+    {
+        "title": "Cryptopals",
+        "description": "Classic hands-on crypto challenges that take you from basic XOR to real-world attack scenarios.",
+        "category": "cryptography",
+        "resource_type": ResourceType.LAB,
+        "difficulty": DifficultyLevel.ADVANCED,
+        "provider": "Cryptopals",
+        "url": "https://cryptopals.com/",
+        "tags": ["crypto", "challenges", "python"],
+    },
+]
+
+
+async def seed_library(db: AsyncSession) -> None:
+    result = await db.execute(select(LibraryResource).limit(1))
+    if result.scalars().first():
+        print("[skip] library resources exist")
+        return
+
+    db.add_all(
+        [
+            LibraryResource(
+                **item,
+                is_free=True,
+                is_published=True,
+                view_count=0,
+            )
+            for item in LIBRARY_RESOURCES
+        ]
+    )
+    await db.commit()
+    print(f"[ok] {len(LIBRARY_RESOURCES)} library resources seeded")
+
+
 async def main() -> None:
     engine = create_engine()
     async with engine.begin() as conn:
@@ -531,6 +679,7 @@ async def main() -> None:
         await seed_learning_content(db)
         await seed_missions(db)
         await seed_achievements(db)
+        await seed_library(db)
         await seed_misc(db)
 
     await engine.dispose()

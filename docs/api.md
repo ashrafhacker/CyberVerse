@@ -1,4 +1,4 @@
-# CyberVerse API Reference
+﻿# CyberVerse API Reference
 
 Base URL: `https://api.cyberverse.io/api/v1` (dev: `http://localhost:8000/api/v1`)
 
@@ -7,7 +7,7 @@ Base URL: `https://api.cyberverse.io/api/v1` (dev: `http://localhost:8000/api/v1
 - **Auth**: `Authorization: Bearer <access_token>`
 - **Envelope**: all responses are `{ "success": bool, "message": str, "data": T }` (`APIResponse`)
 - **Errors**: `{ "detail": "message" }` with standard HTTP status codes
-- **Pagination**: `?page=1&page_size=20` → `{ "total", "page", "size", "items" }`
+- **Pagination**: `?page=1&page_size=20` â†’ `{ "total", "page", "size", "items" }`
 - **Roles** (ascending): guest, student, premium_student, instructor, moderator, administrator, developer, super_admin
 
 ## Authentication
@@ -87,7 +87,7 @@ POST /auth/login
 | GET | `/courses/{id}/quiz` | Course quiz | student |
 | GET | `/lessons/{id}` | Lesson content | student |
 | GET | `/lessons/{id}/quiz` | Quiz questions | student |
-| POST | `/lessons/{id}/quiz/submit` | Submit answers → score, pass/fail, XP | student |
+| POST | `/lessons/{id}/quiz/submit` | Submit answers â†’ score, pass/fail, XP | student |
 | GET | `/lessons/{id}/quiz/attempts` | Attempt history | student |
 
 ### Quiz submission
@@ -101,10 +101,19 @@ POST /lessons/{id}/quiz/submit
   "data": {
     "score": 80, "max_score": 100, "passed": true,
     "xp_earned": 50, "coins_earned": 20,
-    "feedback": { "q1": "Correct — OWASP Top 10..." }
+    "feedback": { "q1": "Correct â€” OWASP Top 10..." }
   }
 }
 ```
+
+## Library
+
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| GET | /library/ | Browse published resources (filters: search, category, esource_type, difficulty, paginated) | any authenticated user |
+| GET | /library/filters | Available category/type/difficulty filter values | any authenticated user |
+| GET | /library/{id} | Resource detail (increments view count) | any authenticated user |
+| POST | /library/ | Add a resource (url or ile_path required) | moderator/administrator |
 
 ## Missions
 
@@ -185,7 +194,7 @@ POST /lessons/{id}/quiz/submit
 | POST | `/instructor/quizzes/{id}/questions` | Add question | instructor* |
 | GET | `/instructor/lessons/{id}/progress` | Lesson analytics | instructor* |
 
-*Ownership enforced — authors can only edit their own courses (super_admin bypass).
+*Ownership enforced â€” authors can only edit their own courses (super_admin bypass).
 
 ## Admin
 
