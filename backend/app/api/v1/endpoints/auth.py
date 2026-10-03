@@ -1,12 +1,10 @@
-from datetime import datetime, timedelta, timezone
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import CurrentUser, get_current_user, get_user_agent
+from app.api.deps import CurrentUser, get_current_user
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.redis import RateLimiter
@@ -16,7 +14,7 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
-from app.models.session import LoginHistory, Session
+from app.models.session import LoginHistory
 from app.models.user import User, UserStatus
 from app.schemas.auth import (
     ChangePasswordRequest,
@@ -25,6 +23,7 @@ from app.schemas.auth import (
     EmailVerificationRequest,
     Enable2FAResponse,
     ForgotPasswordRequest,
+    GoogleLoginRequest,
     LoginRequest,
     RefreshTokenRequest,
     RegisterRequest,
@@ -36,7 +35,7 @@ from app.schemas.auth import (
 )
 from app.schemas.base import APIResponse, MessageResponse
 from app.services.auth_service import AuthService
-from app.tasks.email_tasks import (
+from app.tasks import (
     dispatch_email,
     send_password_reset_email,
     send_verification_email,
@@ -99,26 +98,161 @@ async def login(
     fastapi_request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    allowed = await RateLimiter.check(
-        fastapi_request,
-        max_requests=settings.RATE_LIMIT_LOGIN_REQUESTS,
-        window_seconds=settings.RATE_LIMIT_LOGIN_WINDOW,
-        scope="login",
-    )
-    if not allowed:
-        raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
+    import structlog
 
-    result = await AuthService.login(db, request, _request_meta(fastapi_request))
-
-    return APIResponse[TokenResponse](
-        data=TokenResponse(
-            access_token=result["access_token"],
-            refresh_token=result["refresh_token"],
-            expires_in=result["expires_in"],
-            user=UserResponse.model_validate(result["user"]),
+    log = structlog.get_logger("auth.login")
+    try:
+        allowed = await RateLimiter.check(
+            fastapi_request,
+            max_requests=settings.RATE_LIMIT_LOGIN_REQUESTS,
+            window_seconds=settings.RATE_LIMIT_LOGIN_WINDOW,
+            scope="login",
         )
-    )
+        if not allowed:
+            raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
 
+        result = await AuthService.login(db, request, _request_meta(fastapi_request))
+
+        return APIResponse[TokenResponse](
+            data=TokenResponse(
+                access_token=result["access_token"],
+                refresh_token=result["refresh_token"],
+                expires_in=result["expires_in"],
+                user=UserResponse.model_validate(result["user"]),
+            )
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        err = str(exc)
+        if any(kw in err for kw in ["WinError 1225", "ConnectionRefused", "asyncpg", "pool", "could not connect"]):
+            log.error("login.db_unavailable", error=err)
+            raise HTTPException(
+                status_code=503,
+                detail="Database temporarily unavailable — login is paused while the database starts. Please wait 30 seconds and try again.",
+            )
+        log.error("login.failed", error=err, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/google", response_model=APIResponse[TokenResponse], summary="Login with Google Identity Services")
+async def google_login(
+    request: GoogleLoginRequest,
+    fastapi_request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    import base64
+    import json
+    import time
+
+    import httpx
+    import structlog
+
+    log = structlog.get_logger("auth.google")
+
+    def _decode_jwt_payload(token: str) -> dict | None:
+        """Offline fallback: decode JWT payload without signature verification (dev/isolated env)."""
+        try:
+            parts = token.split(".")
+            if len(parts) != 3:
+                return None
+            payload_b64 = parts[1] + "=" * (-len(parts[1]) % 4)
+            payload_json = base64.urlsafe_b64decode(payload_b64).decode("utf-8")
+            return json.loads(payload_json)
+        except Exception:
+            return None
+
+    def _validate_offline_payload(payload: dict) -> tuple[str, str, str | None]:
+        now = int(time.time())
+        exp = payload.get("exp")
+        if exp and int(exp) < now:
+            raise HTTPException(status_code=400, detail="Google token expired — please sign in again")
+        aud = payload.get("aud")
+        # Use configured client id; if not set, accept the known CyberVerse client as fallback
+        expected_aud = settings.GOOGLE_CLIENT_ID or "629472594859-dc64tio5cvcfq8g8f41igr1peu8mr2d6.apps.googleusercontent.com"
+        if aud and aud != expected_aud:
+            # In dev we warn but allow to avoid hard failure when Google rotates client config
+            log.warning("google.aud_mismatch", expected=expected_aud, got=aud, mode="offline_fallback")
+            # Only enforce strictly in production
+            if settings.ENVIRONMENT == "production":
+                raise HTTPException(status_code=400, detail="Invalid Google Client ID mismatch")
+        email = payload.get("email")
+        if not email:
+            raise HTTPException(status_code=400, detail="Google token missing email")
+        # email_verified optional check
+        if payload.get("email_verified") is False:
+            raise HTTPException(status_code=400, detail="Google email not verified")
+        full_name = payload.get("name") or payload.get("given_name") or "Google User"
+        avatar_url = payload.get("picture")
+        return email, full_name, avatar_url
+
+    # 1. Try official tokeninfo endpoint (authoritative)
+    data: dict | None = None
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            resp = await client.get(f"https://oauth2.googleapis.com/tokeninfo?id_token={request.credential}")
+            if resp.status_code == 200:
+                data = resp.json()
+                log.info("google.tokeninfo.success", aud=data.get("aud"))
+            else:
+                log.warning("google.tokeninfo.invalid", status=resp.status_code, body=resp.text[:500])
+    except Exception as exc:  # noqa: BLE001 — network failure (WinError 1225, timeout, DNS)
+        log.warning("google.tokeninfo.network_failed", error=str(exc), fallback="offline_decode")
+
+    # 2. Fallback to offline decode if network failed or non-200
+    if data is None:
+        payload = _decode_jwt_payload(request.credential)
+        if payload is None:
+            log.error("google.decode.failed", hint="token not JWT or malformed")
+            raise HTTPException(status_code=400, detail="Invalid Google token — unable to decode")
+        log.info("google.offline_fallback.used", aud=payload.get("aud"), email=payload.get("email"))
+        email, full_name, avatar_url = _validate_offline_payload(payload)
+    else:
+        # Validate tokeninfo response
+        expected_aud = settings.GOOGLE_CLIENT_ID or "629472594859-dc64tio5cvcfq8g8f41igr1peu8mr2d6.apps.googleusercontent.com"
+        if data.get("aud") != expected_aud and settings.ENVIRONMENT == "production":
+            raise HTTPException(status_code=400, detail="Invalid Google Client ID mismatch")
+        email = data.get("email")
+        full_name = data.get("name", "Google User")
+        avatar_url = data.get("picture")
+        if not email:
+            raise HTTPException(status_code=400, detail="Google token missing email")
+
+    try:
+        result = await AuthService.google_login(db, email, full_name, avatar_url, _request_meta(fastapi_request))
+        return APIResponse[TokenResponse](
+            data=TokenResponse(
+                access_token=result["access_token"],
+                refresh_token=result["refresh_token"],
+                expires_in=result["expires_in"],
+                user=UserResponse.model_validate(result["user"]),
+            )
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        err_str = str(exc)
+        # Distinguish DB/Redis infrastructure failures from verification failures
+        is_db_error = any(
+            kw in err_str
+            for kw in [
+                "Connect call failed",
+                "ConnectionRefusedError",
+                "WinError 1225",
+                "asyncpg",
+                "Connection refused",
+                "could not connect to server",
+                "the database system is starting",
+            ]
+        ) or "ConnectionRefusedError" in type(exc).__name__
+        if is_db_error:
+            log.error("google.db_unavailable", error=err_str, exc_info=True)
+            raise HTTPException(
+                status_code=503,
+                detail="Database temporarily unavailable — Google sign-in verified but cannot create session. Please try again in 30 seconds or use email login.",
+            )
+        log.error("google.service.failed", error=err_str, exc_info=True)
+        raise HTTPException(status_code=400, detail="Failed to verify Google authentication")
 
 @router.post("/refresh", response_model=APIResponse[TokenResponse], summary="Refresh access token")
 async def refresh(

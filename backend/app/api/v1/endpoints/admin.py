@@ -1,15 +1,17 @@
+from datetime import UTC
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import CurrentUser, require_admin, require_super_admin
+from app.api.deps import require_admin, require_super_admin
 from app.core.database import get_db
 from app.models.analytics import AppSetting, FeatureFlag
 from app.models.notification import Announcement
-from app.models.premium import Coupon, Subscription, SubscriptionPlan
+from app.models.premium import Subscription
 from app.models.session import AuditLog
-from app.models.support import SupportTicket, TicketMessage
+from app.models.support import SupportTicket
 from app.models.user import User, UserRole
 from app.schemas.base import APIResponse, MessageResponse
 
@@ -43,7 +45,7 @@ class UserStatusUpdate(BaseModel):
 
 @router.get("/overview", response_model=APIResponse[dict], summary="Admin overview dashboard")
 async def admin_overview(
-    _: CurrentUser = Depends(require_admin),
+    _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     total_users = (await db.execute(select(func.count(User.id)))).scalar_one()
@@ -87,7 +89,7 @@ async def admin_overview(
 
 @router.get("/users", response_model=APIResponse[dict], summary="List all users with pagination")
 async def admin_users(
-    _: CurrentUser = Depends(require_admin),
+    _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -138,7 +140,7 @@ async def admin_users(
 async def admin_update_role(
     user_id: str,
     request: UserRoleUpdate,
-    _: CurrentUser = Depends(require_super_admin),
+    _: User = Depends(require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     from uuid import UUID
@@ -173,7 +175,7 @@ async def admin_update_role(
 async def admin_update_status(
     user_id: str,
     request: UserStatusUpdate,
-    _: CurrentUser = Depends(require_admin),
+    _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     from uuid import UUID
@@ -196,7 +198,7 @@ async def admin_update_status(
 
 @router.get("/audit-logs", response_model=APIResponse[dict], summary="View audit logs")
 async def admin_audit_logs(
-    _: CurrentUser = Depends(require_admin),
+    _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
@@ -236,7 +238,7 @@ async def admin_audit_logs(
 
 @router.get("/tickets", response_model=APIResponse[dict], summary="List all support tickets")
 async def admin_tickets(
-    _: CurrentUser = Depends(require_admin),
+    _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
     status_filter: str = Query(None, alias="status"),
 ):
@@ -264,7 +266,7 @@ async def admin_tickets(
 
 @router.get("/subscriptions", response_model=APIResponse[dict], summary="List subscriptions")
 async def admin_subscriptions(
-    _: CurrentUser = Depends(require_admin),
+    _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -289,7 +291,7 @@ async def admin_subscriptions(
 
 @router.get("/feature-flags", response_model=APIResponse[list], summary="List feature flags")
 async def admin_feature_flags(
-    _: CurrentUser = Depends(require_admin),
+    _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(FeatureFlag).order_by(FeatureFlag.created_at.desc()))
@@ -312,7 +314,7 @@ async def admin_feature_flags(
 async def admin_update_flag(
     flag_id: str,
     request: FeatureFlagUpdate,
-    _: CurrentUser = Depends(require_admin),
+    _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     from uuid import UUID
@@ -340,7 +342,7 @@ async def admin_update_flag(
 
 @router.get("/settings", response_model=APIResponse[list], summary="List application settings")
 async def admin_settings(
-    _: CurrentUser = Depends(require_admin),
+    _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(AppSetting).order_by(AppSetting.created_at.desc()))
@@ -357,7 +359,7 @@ async def admin_settings(
 async def admin_update_setting(
     setting_id: str,
     request: SettingUpdate,
-    _: CurrentUser = Depends(require_admin),
+    _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     from uuid import UUID
@@ -375,10 +377,10 @@ async def admin_update_setting(
 @router.post("/announcements", response_model=APIResponse[dict], summary="Create an announcement")
 async def admin_create_announcement(
     request: AnnouncementCreate,
-    _: CurrentUser = Depends(require_admin),
+    _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     announcement = Announcement(
         author_id=_.id,
@@ -387,8 +389,8 @@ async def admin_create_announcement(
         announcement_type=request.announcement_type,
         is_pinned=request.is_pinned,
         is_draft=request.is_draft,
-        publish_at=None if request.is_draft else datetime.now(timezone.utc),
-        published_at=None if request.is_draft else datetime.now(timezone.utc),
+        publish_at=None if request.is_draft else datetime.now(UTC),
+        published_at=None if request.is_draft else datetime.now(UTC),
     )
     db.add(announcement)
     await db.commit()
@@ -398,7 +400,7 @@ async def admin_create_announcement(
 
 @router.get("/announcements", response_model=APIResponse[list], summary="List announcements")
 async def admin_list_announcements(
-    _: CurrentUser = Depends(require_admin),
+    _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(

@@ -1,44 +1,54 @@
-from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, Any
+import base64
+from datetime import UTC, datetime, timedelta
+from io import BytesIO
+from typing import Any
 from uuid import uuid4
 
-from jose import jwt, JWTError
-from passlib.context import CryptContext
+import bcrypt
 import pyotp
 import qrcode
-from io import BytesIO
-import base64
+from jose import JWTError, jwt
 
 from app.core.config import settings
 
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
-
+    # ponytail: respects BCRYPT_ROUNDS so low-CPU hosts can set e.g. 10 (4x faster than 12)
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=settings.BCRYPT_ROUNDS)).decode("utf-8")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+    except ValueError:
+        return False
+
+# Non-blocking wrappers for async routes — avoid blocking the event loop's CPU
+import asyncio as _asyncio
+
+
+async def hash_password_async(password: str) -> str:
+    return await _asyncio.to_thread(hash_password, password)
+
+async def verify_password_async(plain_password: str, hashed_password: str) -> bool:
+    return await _asyncio.to_thread(verify_password, plain_password, hashed_password)
 
 
 def create_access_token(
     subject: str,
-    additional_claims: Optional[Dict[str, Any]] = None,
-    expires_delta: Optional[timedelta] = None,
+    additional_claims: dict[str, Any] | None = None,
+    expires_delta: timedelta | None = None,
 ) -> str:
     if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
+        expire = datetime.now(UTC) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(
+        expire = datetime.now(UTC) + timedelta(
             minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
         )
 
     to_encode = {
         "sub": subject,
         "exp": expire,
-        "iat": datetime.now(timezone.utc),
+        "iat": datetime.now(UTC),
         "iss": settings.JWT_ISSUER,
         "aud": settings.JWT_AUDIENCE,
         "jti": str(uuid4()),
@@ -48,21 +58,21 @@ def create_access_token(
     if additional_claims:
         to_encode.update(additional_claims)
 
-    return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    return jwt.encode(to_encode, settings.JWT_SECRET_KEY.get_secret_value(), algorithm=settings.JWT_ALGORITHM)  # type: ignore[no-any-return]
 
 
 def create_refresh_token(
     subject: str,
-    additional_claims: Optional[Dict[str, Any]] = None,
+    additional_claims: dict[str, Any] | None = None,
 ) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(
+    expire = datetime.now(UTC) + timedelta(
         days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS
     )
 
     to_encode = {
         "sub": subject,
         "exp": expire,
-        "iat": datetime.now(timezone.utc),
+        "iat": datetime.now(UTC),
         "iss": settings.JWT_ISSUER,
         "aud": settings.JWT_AUDIENCE,
         "jti": str(uuid4()),
@@ -72,24 +82,29 @@ def create_refresh_token(
     if additional_claims:
         to_encode.update(additional_claims)
 
-    return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    return jwt.encode(to_encode, settings.JWT_SECRET_KEY.get_secret_value(), algorithm=settings.JWT_ALGORITHM)  # type: ignore[no-any-return]
 
 
-def decode_token(token: str) -> Dict[str, Any]:
+def decode_token(
+    token: str,
+    expected_type: str | None = None,
+) -> dict[str, Any]:
     try:
         payload = jwt.decode(
             token,
-            settings.JWT_SECRET_KEY,
+            settings.JWT_SECRET_KEY.get_secret_value(),
             algorithms=[settings.JWT_ALGORITHM],
             audience=settings.JWT_AUDIENCE,
             issuer=settings.JWT_ISSUER,
         )
-        return payload
+        if expected_type and payload.get("type") != expected_type:
+            raise ValueError(f"Unexpected token type: {payload.get('type')}")
+        return payload  # type: ignore[no-any-return]
     except JWTError as e:
-        raise ValueError(f"Invalid token: {str(e)}")
+        raise ValueError(f"Invalid token: {e!s}")
 
 
-def verify_token_type(payload: Dict[str, Any], expected_type: str) -> bool:
+def verify_token_type(payload: dict[str, Any], expected_type: str) -> bool:
     return payload.get("type") == expected_type
 
 

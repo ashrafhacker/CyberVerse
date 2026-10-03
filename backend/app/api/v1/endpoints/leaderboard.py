@@ -17,8 +17,11 @@ async def get_leaderboard(
     offset: int = Query(0, ge=0),
     type: str = Query("weekly", pattern="^(weekly|monthly|all_time)$"),
 ):
-    board = await LeaderboardService.get_or_create_weekly(db)
+    board = await LeaderboardService.get_or_create_board(db, type)
     entries, total = await LeaderboardService.get_rankings(db, board, limit=limit, offset=offset)
+    if total == 0:
+        await LeaderboardService.rebuild_board(db, board)
+        entries, total = await LeaderboardService.get_rankings(db, board, limit=limit, offset=offset)
     my_rank = await LeaderboardService.get_user_rank(db, board, user.id)
 
     return APIResponse[dict](
@@ -33,6 +36,47 @@ async def get_leaderboard(
             "entries": entries,
         }
     )
+
+
+@router.get("/global", response_model=APIResponse[dict], summary="Global (all-time) leaderboard")
+async def global_leaderboard(user: CurrentUser, db: AsyncSession = Depends(get_db), limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
+    board = await LeaderboardService.get_or_create_board(db, "all_time")
+    entries, total = await LeaderboardService.get_rankings(db, board, limit=limit, offset=offset)
+    if total == 0:
+        await LeaderboardService.rebuild_board(db, board)
+        entries, total = await LeaderboardService.get_rankings(db, board, limit=limit, offset=offset)
+    my_rank = await LeaderboardService.get_user_rank(db, board, user.id)
+    return APIResponse[dict](data={"type": "all_time", "total_players": total, "my_rank": my_rank, "entries": entries})
+
+
+@router.get("/weekly", response_model=APIResponse[dict], summary="Weekly leaderboard")
+async def weekly_leaderboard(user: CurrentUser, db: AsyncSession = Depends(get_db), limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
+    board = await LeaderboardService.get_or_create_board(db, "weekly")
+    entries, total = await LeaderboardService.get_rankings(db, board, limit=limit, offset=offset)
+    if total == 0:
+        await LeaderboardService.rebuild_board(db, board)
+        entries, total = await LeaderboardService.get_rankings(db, board, limit=limit, offset=offset)
+    my_rank = await LeaderboardService.get_user_rank(db, board, user.id)
+    return APIResponse[dict](data={"type": "weekly", "total_players": total, "my_rank": my_rank, "entries": entries})
+
+
+@router.get("/monthly", response_model=APIResponse[dict], summary="Monthly leaderboard")
+async def monthly_leaderboard(user: CurrentUser, db: AsyncSession = Depends(get_db), limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
+    board = await LeaderboardService.get_or_create_board(db, "monthly")
+    entries, total = await LeaderboardService.get_rankings(db, board, limit=limit, offset=offset)
+    if total == 0:
+        await LeaderboardService.rebuild_board(db, board)
+        entries, total = await LeaderboardService.get_rankings(db, board, limit=limit, offset=offset)
+    my_rank = await LeaderboardService.get_user_rank(db, board, user.id)
+    return APIResponse[dict](data={"type": "monthly", "total_players": total, "my_rank": my_rank, "entries": entries})
+
+
+@router.get("/me", response_model=APIResponse[dict], summary="My leaderboard position")
+async def my_leaderboard(user: CurrentUser, db: AsyncSession = Depends(get_db)):
+    board = await LeaderboardService.get_or_create_board(db, "all_time")
+    my_rank = await LeaderboardService.get_user_rank(db, board, user.id)
+    entries, total = await LeaderboardService.get_rankings(db, board, limit=1)
+    return APIResponse[dict](data={"my_rank": my_rank, "total_players": total})
 
 
 @router.get("/top", response_model=APIResponse[list], summary="Get top players")

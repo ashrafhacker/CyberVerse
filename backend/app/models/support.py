@@ -1,22 +1,28 @@
 import enum
-from datetime import datetime, timezone
-from typing import Optional, List, Dict
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Optional
 from uuid import uuid4
 
 from sqlalchemy import (
-    String,
-    Text,
-    Integer,
-    DateTime,
     Boolean,
-    Enum as SQLEnum,
+    DateTime,
     ForeignKey,
     Index,
+    Integer,
+    String,
+    Text,
 )
-from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB
+from sqlalchemy import (
+    Enum as SQLEnum,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 class TicketStatus(str, enum.Enum):
@@ -62,7 +68,7 @@ class SupportTicket(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    assignee_id: Mapped[Optional[PGUUID]] = mapped_column(
+    assignee_id: Mapped[PGUUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
@@ -87,29 +93,29 @@ class SupportTicket(Base):
         nullable=False,
     )
 
-    attachments: Mapped[List[Dict]] = mapped_column(JSONB, default=list, nullable=False)
-    metadata: Mapped[Dict] = mapped_column(JSONB, default=dict, nullable=False)
+    attachments: Mapped[list[dict]] = mapped_column(JSONB, default=list, nullable=False)
+    meta_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
-    first_response_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    first_response_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     is_private: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
 
-    user: Mapped["User"] = relationship("User", back_populates="support_tickets")  # noqa: F821
-    messages: Mapped[List["TicketMessage"]] = relationship(
+    user: Mapped["User"] = relationship("User", back_populates="support_tickets", foreign_keys=[user_id])  # noqa: F821
+    messages: Mapped[list["TicketMessage"]] = relationship(
         "TicketMessage", back_populates="ticket", cascade="all, delete-orphan"
     )
 
@@ -137,12 +143,12 @@ class TicketMessage(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     is_staff_reply: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
-    attachments: Mapped[List[Dict]] = mapped_column(JSONB, default=list, nullable=False)
-    metadata: Mapped[Dict] = mapped_column(JSONB, default=dict, nullable=False)
+    attachments: Mapped[list[dict]] = mapped_column(JSONB, default=list, nullable=False)
+    meta_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
 
@@ -157,12 +163,12 @@ class FAQItem(Base):
     )
 
     id: Mapped[PGUUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    category: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(100), nullable=False)
 
     question: Mapped[str] = mapped_column(String(300), nullable=False)
     answer: Mapped[str] = mapped_column(Text, nullable=False)
 
-    tags: Mapped[List[str]] = mapped_column(JSONB, default=list, nullable=False)
+    tags: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
     is_published: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     view_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     helpful_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -172,12 +178,12 @@ class FAQItem(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )

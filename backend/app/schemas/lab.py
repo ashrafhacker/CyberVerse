@@ -45,6 +45,8 @@ class LabSessionOut(BaseModel):
     mode: str
     mentor_level: str
     current_facility_slug: str
+    mission_slug: str | None = None
+    difficulty: str = "beginner"
     score: int | None = None
     xp_awarded: int
     coins_awarded: int
@@ -61,6 +63,7 @@ class LabWorldOut(BaseModel):
     assets: list[dict[str, Any]]
     identities: list[dict[str, Any]]
     alerts: list[dict[str, Any]]
+    logs: list[dict[str, Any]] = Field(default_factory=list)
     evidence: list[dict[str, Any]]
     objectives: list[dict[str, Any]]
     tool_manifest: list[dict[str, Any]]
@@ -105,6 +108,22 @@ class LabReportCreate(BaseModel):
 class LabHomeAttestationCreate(BaseModel):
     acknowledged: bool
     attestation_text: str = Field(min_length=20)
+
+
+class LabAnalysisOut(BaseModel):
+    generated_with: str
+    analyst: str
+    company: str | None = None
+    facility: str | None = None
+    overview: str
+    confidence: int
+    coverage: dict[str, Any]
+    predominant_phase: str
+    kill_chain: list[dict[str, Any]]
+    timeline: list[dict[str, Any]]
+    recommendations: list[str]
+    entities: dict[str, Any]
+    safety_metadata: dict[str, Any]
 
 
 class LabHomeProfileCreate(BaseModel):

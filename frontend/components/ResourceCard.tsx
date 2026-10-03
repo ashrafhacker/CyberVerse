@@ -1,4 +1,4 @@
-import { ArrowUpRight, Clock, ExternalLink } from 'lucide-react';
+import { ArrowUpRight, Clock, ExternalLink, ShieldAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface LibraryItem {
@@ -73,29 +73,35 @@ export default function ResourceCard({ resource }: { resource: LibraryItem }) {
         </div>
       )}
 
-      <div className="mt-auto flex items-center justify-between border-t border-cyber-border pt-3">
-        {resource.duration_minutes ? (
-          <span className="flex items-center gap-1 font-mono text-xs text-cyber-muted">
-            <Clock className="h-3 w-3" />
-            {Math.round(resource.duration_minutes / 60)}h
-          </span>
-        ) : (
-          <span />
-        )}
-        {resource.url ? (
-          <a
-            href={resource.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1 font-mono text-sm text-cyber-primary hover:text-cyber-secondary"
-          >
-            open <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-        ) : (
-          <span className="flex items-center gap-1 font-mono text-sm text-cyber-muted">
-            in library <ArrowUpRight className="h-3.5 w-3.5" />
-          </span>
-        )}
+      <div className="mt-auto flex flex-col gap-2 border-t border-cyber-border pt-3">
+        <div className="flex items-center justify-between">
+          {resource.duration_minutes ? (
+            <span className="flex items-center gap-1 font-mono text-xs text-cyber-muted">
+              <Clock className="h-3 w-3" />
+              {Math.round(resource.duration_minutes / 60)}h
+            </span>
+          ) : (
+            <span />
+          )}
+          {resource.url ? (
+            <a
+              href={resource.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 font-mono text-sm text-cyber-primary hover:text-cyber-secondary"
+            >
+              open <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          ) : (
+            <span className="flex items-center gap-1 font-mono text-sm text-cyber-muted">
+              in library <ArrowUpRight className="h-3.5 w-3.5" />
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 text-[10px] text-cyber-muted bg-cyber-bg/50 rounded px-3 py-1.5 border border-cyber-border">
+          <ShieldAlert className="h-3 w-3 text-amber-400" />
+          <span>For educational purposes only — not for attacking systems. Learn to secure, not exploit.</span>
+        </div>
       </div>
     </article>
   );

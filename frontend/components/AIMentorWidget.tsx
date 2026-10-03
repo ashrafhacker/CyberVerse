@@ -11,6 +11,13 @@ interface Message {
   text: string;
 }
 
+const QUICK_PROMPTS = [
+  { icon: Lightbulb, label: 'Ethical Hacking', prompt: 'What is ethical hacking and how do I start learning it safely?' },
+  { icon: BookOpen, label: 'Port Scanning', prompt: 'Explain port scanning and how it is used defensively.' },
+  { icon: HelpCircle, label: 'SQLi Defense', prompt: 'How do I defend an application against SQL injection?' },
+  { icon: Bot, label: 'Mission Help', prompt: 'Guide me through the Cyber Network Raid game step by step.' },
+];
+
 export default function AIMentorWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
@@ -19,7 +26,7 @@ export default function AIMentorWidget() {
     {
       id: 'welcome',
       sender: 'ai',
-      text: 'Greetings Agent! I am your CyberVerse AI Mentor. Ask me any cybersecurity concept, request mission hints, or ask for study guidance!',
+      text: 'Greetings Agent! I am your CyberVerse AI Mentor. Ask me any cybersecurity concept, request mission hints, or ask for study guidance — I am wired into the CyberVerse project itself!',
     },
   ]);
 
@@ -33,22 +40,18 @@ export default function AIMentorWidget() {
     setLoading(true);
 
     try {
-      // Call AI endpoint /api/v1/ai/explain
-      const res = await api.post<APIResponse<{ explanation: string }>>('/ai/explain', {
-        concept: textToSend,
-        difficulty: 'intermediate',
+      const history = [...messages, userMsg]
+        .slice(-12)
+        .map((m) => ({ role: m.sender === 'user' ? 'user' : 'assistant', content: m.text }));
+      const res = await api.post<APIResponse<{ reply: string }>>('/ai/chat', { 
+        messages: history,
+        current_page: window.location.href
       });
-      const explanation = res.data?.explanation || 'Keep pushing forward! Practice in the virtual sandbox to master this concept.';
-      setMessages((prev) => [...prev, { id: String(Date.now() + 1), sender: 'ai', text: explanation }]);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: String(Date.now() + 1),
-          sender: 'ai',
-          text: 'CyberVerse Mentor: Keep practicing! Review the lesson materials and complete sandboxed labs to strengthen your skills.',
-        },
-      ]);
+      const reply = res.data?.reply || 'Keep pushing forward! Practice in the virtual sandbox to master this concept.';
+      setMessages((prev) => [...prev, { id: String(Date.now() + 1), sender: 'ai', text: reply }]);
+    } catch (err) {
+      const fallback = err instanceof Error ? err.message : 'The AI mentor is temporarily unavailable.';
+      setMessages((prev) => [...prev, { id: String(Date.now() + 1), sender: 'ai', text: fallback }]);
     } finally {
       setLoading(false);
     }
@@ -84,27 +87,16 @@ export default function AIMentorWidget() {
 
           {/* Quick Prompt Chips */}
           <div className="mb-2 flex flex-wrap gap-1.5 border-b border-cyber-border/40 pb-2 text-[11px]">
-            <button
-              onClick={() => void handleSend('What is Ethical Hacking?')}
-              className="flex items-center gap-1 rounded border border-cyber-primary/40 bg-cyber-primary/10 px-2 py-1 text-cyber-primary hover:bg-cyber-primary/20"
-            >
-              <Lightbulb className="h-3 w-3" />
-              Ethical Hacking
-            </button>
-            <button
-              onClick={() => void handleSend('Explain Port Scanning')}
-              className="flex items-center gap-1 rounded border border-cyber-secondary/40 bg-cyber-secondary/10 px-2 py-1 text-cyber-secondary hover:bg-cyber-secondary/20"
-            >
-              <BookOpen className="h-3 w-3" />
-              Port Scanning
-            </button>
-            <button
-              onClick={() => void handleSend('SQL Injection Defense')}
-              className="flex items-center gap-1 rounded border border-cyber-accent/40 bg-cyber-accent/10 px-2 py-1 text-cyber-accent hover:bg-cyber-accent/20"
-            >
-              <HelpCircle className="h-3 w-3" />
-              SQLi Defense
-            </button>
+            {QUICK_PROMPTS.map(({ icon: Icon, label, prompt }) => (
+              <button
+                key={label}
+                onClick={() => void handleSend(prompt)}
+                className="flex items-center gap-1 rounded border border-cyber-primary/40 bg-cyber-primary/10 px-2 py-1 text-cyber-primary hover:bg-cyber-primary/20"
+              >
+                <Icon className="h-3 w-3" />
+                {label}
+              </button>
+            ))}
           </div>
 
           {/* Messages Stream */}

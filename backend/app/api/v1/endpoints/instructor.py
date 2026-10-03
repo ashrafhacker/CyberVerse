@@ -1,16 +1,17 @@
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import CurrentUser, require_instructor
+from app.api.deps import require_instructor
 from app.core.database import get_db
 from app.models.course import (
     ContentStatus,
-    DifficultyLevel,
     Course,
+    DifficultyLevel,
     Lesson,
     Module,
     Quiz,
@@ -18,7 +19,7 @@ from app.models.course import (
 )
 from app.models.progress import Enrollment, LessonProgress
 from app.models.user import User
-from app.schemas.base import APIResponse, MessageResponse
+from app.schemas.base import APIResponse
 
 router = APIRouter()
 
@@ -142,7 +143,7 @@ def _serialize_course(course: Course) -> dict:
 
 @router.get("/stats", response_model=APIResponse[dict], summary="Instructor statistics")
 async def instructor_stats(
-    user: CurrentUser = Depends(require_instructor),
+    user: Annotated[User, Depends(require_instructor)],
     db: AsyncSession = Depends(get_db),
 ):
     my_courses = (
@@ -199,7 +200,7 @@ async def instructor_stats(
 @router.post("/courses", response_model=APIResponse[dict], summary="Create a course")
 async def create_course(
     payload: CourseCreate,
-    user: CurrentUser = Depends(require_instructor),
+    user: Annotated[User, Depends(require_instructor)],
     db: AsyncSession = Depends(get_db),
 ):
     slug = payload.name.lower().replace(" ", "-").replace("_", "-")[:100]
@@ -232,7 +233,7 @@ async def create_course(
 async def update_course(
     course_id: UUID,
     payload: CourseUpdate,
-    user: CurrentUser = Depends(require_instructor),
+    user: Annotated[User, Depends(require_instructor)],
     db: AsyncSession = Depends(get_db),
 ):
     course = await _get_course_or_404(db, course_id)
@@ -250,7 +251,7 @@ async def update_course(
 @router.post("/courses/{course_id}/publish", response_model=APIResponse[dict], summary="Publish a course")
 async def publish_course(
     course_id: UUID,
-    user: CurrentUser = Depends(require_instructor),
+    user: Annotated[User, Depends(require_instructor)],
     db: AsyncSession = Depends(get_db),
 ):
     course = await _get_course_or_404(db, course_id)
@@ -265,7 +266,7 @@ async def publish_course(
 async def create_module(
     course_id: UUID,
     payload: ModuleCreate,
-    user: CurrentUser = Depends(require_instructor),
+    user: Annotated[User, Depends(require_instructor)],
     db: AsyncSession = Depends(get_db),
 ):
     course = await _get_course_or_404(db, course_id)
@@ -299,7 +300,7 @@ async def create_module(
 async def create_lesson(
     module_id: UUID,
     payload: LessonCreate,
-    user: CurrentUser = Depends(require_instructor),
+    user: Annotated[User, Depends(require_instructor)],
     db: AsyncSession = Depends(get_db),
 ):
     module = await _get_module_or_404(db, module_id)
@@ -339,7 +340,7 @@ async def create_lesson(
 async def update_lesson(
     lesson_id: UUID,
     payload: LessonUpdate,
-    user: CurrentUser = Depends(require_instructor),
+    user: Annotated[User, Depends(require_instructor)],
     db: AsyncSession = Depends(get_db),
 ):
     lesson = await _get_lesson_or_404(db, lesson_id)
@@ -359,7 +360,7 @@ async def update_lesson(
 async def create_quiz(
     lesson_id: UUID,
     payload: QuizCreate,
-    user: CurrentUser = Depends(require_instructor),
+    user: Annotated[User, Depends(require_instructor)],
     db: AsyncSession = Depends(get_db),
 ):
     lesson = await _get_lesson_or_404(db, lesson_id)
@@ -396,7 +397,7 @@ async def create_quiz(
 async def add_question(
     quiz_id: UUID,
     payload: QuestionCreate,
-    user: CurrentUser = Depends(require_instructor),
+    user: Annotated[User, Depends(require_instructor)],
     db: AsyncSession = Depends(get_db),
 ):
     quiz = await db.get(Quiz, quiz_id)
@@ -430,7 +431,7 @@ async def add_question(
 @router.get("/lessons/{lesson_id}/progress", response_model=APIResponse[dict], summary="Lesson analytics")
 async def lesson_progress(
     lesson_id: UUID,
-    user: CurrentUser = Depends(require_instructor),
+    user: Annotated[User, Depends(require_instructor)],
     db: AsyncSession = Depends(get_db),
 ):
     lesson = await _get_lesson_or_404(db, lesson_id)

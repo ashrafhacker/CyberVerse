@@ -19,7 +19,7 @@ import {
 import Navbar from '@/components/Navbar';
 import { LoadingScreen, TerminalCard } from '@/components/TerminalCard';
 import { api } from '@/lib/api';
-import { useAuth } from '@/lib/auth';
+import { useRequireAuth } from '@/lib/auth';
 import type { APIResponse, LabFacility, LabMission, LabSession, LabWorld } from '@/lib/types';
 
 const facilityIcons: Record<string, typeof Activity> = {
@@ -39,7 +39,7 @@ const safetyRules = [
 ];
 
 export default function LabsPage() {
-  const { user, loading } = useAuth();
+  const { user, loading } = useRequireAuth();
   const [facilities, setFacilities] = useState<LabFacility[]>([]);
   const [missions, setMissions] = useState<LabMission[]>([]);
   const [activeSession, setActiveSession] = useState<LabSession | null>(null);
@@ -81,13 +81,11 @@ export default function LabsPage() {
       });
       const session = sessionResponse.data;
       if (!session) throw new Error('Lab session did not start');
-      setActiveSession(session);
-
-      const worldResponse = await api.get<APIResponse<LabWorld>>(`/labs/sessions/${session.id}/world`);
-      setWorld(worldResponse.data ?? null);
+      
+      // Navigate to real-time lab interface
+      window.location.href = `/labs/${session.id}`;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start lab session');
-    } finally {
       setBusy(false);
     }
   }
@@ -207,27 +205,6 @@ export default function LabsPage() {
             </TerminalCard>
           </div>
         </div>
-
-        {activeSession && world && (
-          <section className="mt-8 grid gap-6 lg:grid-cols-3">
-            <TerminalCard title="active_session.json">
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center gap-2 text-cyber-success">
-                  <CheckCircle2 className="h-4 w-4" />
-                  Session {activeSession.status}
-                </div>
-                <p className="text-cyber-muted">Seed: <span className="font-mono text-cyber-text">{world.scenario_seed}</span></p>
-                <p className="text-cyber-muted">Company: <span className="text-cyber-text">{String(world.company.name ?? 'Fictional enterprise')}</span></p>
-              </div>
-            </TerminalCard>
-            <TerminalCard title="assets.ndjson">
-              <p className="text-sm text-cyber-muted">{world.assets.length} generated assets and {world.identities.length} identities loaded.</p>
-            </TerminalCard>
-            <TerminalCard title="evidence.lockbox">
-              <p className="text-sm text-cyber-muted">{world.evidence.length} evidence items available with synthetic chain-of-custody support.</p>
-            </TerminalCard>
-          </section>
-        )}
 
         <section className="mt-8 grid gap-4 md:grid-cols-3">
           {[

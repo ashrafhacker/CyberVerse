@@ -13,7 +13,7 @@ function jsonResponse(status: number, body: unknown): Response {
 
 describe('token storage', () => {
   beforeEach(() => {
-    localStorage.clear();
+    if (typeof localStorage !== 'undefined') localStorage.clear();
   });
 
   it('returns null tokens when storage is empty', () => {
@@ -36,7 +36,7 @@ describe('token storage', () => {
 
 describe('apiRequest', () => {
   beforeEach(() => {
-    localStorage.clear();
+    if (typeof localStorage !== 'undefined') localStorage.clear();
     vi.restoreAllMocks();
   });
 

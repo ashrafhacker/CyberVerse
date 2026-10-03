@@ -1,24 +1,29 @@
 import enum
-from datetime import datetime, timezone
-from typing import Optional, Dict
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Optional
 from uuid import uuid4
 
 from sqlalchemy import (
-    String,
-    Text,
-    Integer,
-    Numeric,
-    DateTime,
     Boolean,
-    Enum as SQLEnum,
+    DateTime,
     ForeignKey,
     Index,
-    UniqueConstraint,
+    Integer,
+    Numeric,
+    String,
+    Text,
 )
-from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB
+from sqlalchemy import (
+    Enum as SQLEnum,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 class PlanTier(str, enum.Enum):
@@ -53,7 +58,7 @@ class SubscriptionPlan(Base):
     )
 
     id: Mapped[PGUUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
 
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
@@ -76,17 +81,17 @@ class SubscriptionPlan(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     display_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
-    metadata: Mapped[Dict] = mapped_column(JSONB, default=dict, nullable=False)
+    meta_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
 
@@ -120,29 +125,29 @@ class Subscription(Base):
         nullable=False,
     )
 
-    stripe_subscription_id: Mapped[Optional[str]] = mapped_column(String(100), unique=True, nullable=True)
-    stripe_customer_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    razorpay_subscription_id: Mapped[str | None] = mapped_column(String(100), unique=True, nullable=True)
+    razorpay_customer_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
-    current_period_start: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    current_period_end: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    current_period_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    current_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     cancel_at_period_end: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    trial_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    trial_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    trial_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    trial_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    metadata: Mapped[Dict] = mapped_column(JSONB, default=dict, nullable=False)
+    meta_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
 
@@ -166,13 +171,13 @@ class Payment(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    subscription_id: Mapped[Optional[PGUUID]] = mapped_column(
+    subscription_id: Mapped[PGUUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("subscriptions.id", ondelete="SET NULL"),
         nullable=True,
     )
 
-    payment_intent_id: Mapped[Optional[str]] = mapped_column(String(100), unique=True, nullable=True)
+    payment_intent_id: Mapped[str | None] = mapped_column(String(100), unique=True, nullable=True)
     status: Mapped[PaymentStatus] = mapped_column(
         SQLEnum(PaymentStatus, native_enum=False),
         default=PaymentStatus.PENDING,
@@ -182,25 +187,25 @@ class Payment(Base):
     amount: Mapped[Numeric] = mapped_column(Numeric(10, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
     payment_method: Mapped[str] = mapped_column(String(50), default="card", nullable=False)
-    provider: Mapped[str] = mapped_column(String(50), default="stripe", nullable=False)
+    provider: Mapped[str] = mapped_column(String(50), default="razorpay", nullable=False)
 
-    description: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
-    failure_reason: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
-    receipt_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    description: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    failure_reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    receipt_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
-    metadata: Mapped[Dict] = mapped_column(JSONB, default=dict, nullable=False)
+    meta_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
-    paid_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    refunded_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    refunded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
 
@@ -216,29 +221,29 @@ class Coupon(Base):
     )
 
     id: Mapped[PGUUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
 
     discount_type: Mapped[str] = mapped_column(String(20), default="percentage", nullable=False)  # percentage, fixed
     discount_value: Mapped[Numeric] = mapped_column(Numeric(10, 2), nullable=False)
 
-    max_uses: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    max_uses: Mapped[int | None] = mapped_column(Integer, nullable=True)
     used_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     max_uses_per_user: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
-    valid_from: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    valid_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    valid_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    metadata: Mapped[Dict] = mapped_column(JSONB, default=dict, nullable=False)
+    meta_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )

@@ -140,13 +140,13 @@ export default function CyberNetworkGame() {
                 <path d="M0,0 L10,5 L0,10 z" fill="#334155" />
               </marker>
             </defs>
-            {game.links.map((link) => {
+            {game.links.map((link, li) => {
               const from = placed.find((p) => p.node.id === link.from);
               const to = placed.find((p) => p.node.id === link.to);
               if (!from || !to) return null;
               return (
                 <line
-                  key={`${link.from}-${link.to}`}
+                  key={`${link.from}-${link.to}-${li}`}
                   x1={from.x + 34}
                   y1={from.y}
                   x2={to.x - 34}

@@ -13,12 +13,24 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@react-oauth/google": "^0.13.5",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@jtarrio/signals": "^0.10.0",
+    "@mapbox/vector-tile": "^3.0.0",
+    "@meri-imperiumi/eccodes-wasm": "^2.48.2",
+    "cesium": "^1.124.0",
     "clsx": "^2.1.1",
+    "egm96-universal": "^1.1.1",
     "framer-motion": "^11.0.0",
+    "hls.js": "^1.7.3",
     "lucide-react": "^0.400.0",
+    "mgrs": "^2.1.0",
+    "motion": "^12.43.0",
     "next": "^15.5.22",
+    "pbf": "^5.1.2",
     "react": "19.0.0",
     "react-dom": "19.0.0",
+    "satellite.js": "^6.0.2",
     "swr": "^2.2.5",
     "tailwind-merge": "^2.5.0"
   },
@@ -34,9 +46,14 @@
     "eslint-config-next": "15.1.0",
     "jsdom": "^25.0.0",
     "playwright": "^1.62.1",
-    "postcss": "^8.4.49",
-    "tailwindcss": "^3.4.15",
+    "postcss": "^8.5.25",
+    "sharp": "^0.35.4",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5.6.0",
-    "vitest": "^2.1.0"
+    "vite": "^6.0.0",
+    "vite-plugin-cesium": "^1.2.23",
+    "vitest": "^2.1.0",
+    "ws": "^8.21.0"
   }
 }
+

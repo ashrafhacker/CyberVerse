@@ -1,5 +1,4 @@
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select, update
@@ -42,6 +41,11 @@ class AuthService:
         if existing.scalar_one_or_none():
             raise ConflictError("Email already registered")
 
+        from app.models.user import Profile
+        existing_profile = await db.execute(select(Profile).where(Profile.username == data.username))
+        if existing_profile.scalar_one_or_none():
+            raise ConflictError("Username already taken")
+
         user = User(
             email=data.email.lower(),
             password_hash=hash_password(data.password),
@@ -49,17 +53,17 @@ class AuthService:
             role=UserRole.STUDENT,
             status=UserStatus.PENDING,
             provider=AuthProvider.EMAIL,
-            metadata=request_meta,
+            meta_data=request_meta,
         )
         db.add(user)
         await db.flush()
 
-        from app.models.user import Profile
         from app.models.progress import PlayerProgress
+        from app.models.user import Profile
 
         profile = Profile(
             user_id=user.id,
-            username=data.email.split("@")[0],
+            username=data.username,
         )
         db.add(profile)
 
@@ -84,13 +88,13 @@ class AuthService:
             )
             raise AuthenticationError("Invalid email or password")
 
-        if user.locked_until and user.locked_until > datetime.now(timezone.utc):
+        if user.locked_until and user.locked_until > datetime.now(UTC):
             raise AccountLockedError("Account temporarily locked. Try again later.")
 
         if not verify_password(data.password, user.password_hash):
             user.failed_login_attempts += 1
             if user.failed_login_attempts >= AuthService.MAX_FAILED_LOGINS:
-                user.locked_until = datetime.now(timezone.utc) + timedelta(
+                user.locked_until = datetime.now(UTC) + timedelta(
                     minutes=AuthService.LOCKOUT_MINUTES
                 )
             await db.commit()
@@ -119,7 +123,7 @@ class AuthService:
 
         user.failed_login_attempts = 0
         user.locked_until = None
-        user.last_login = datetime.now(timezone.utc)
+        user.last_login = datetime.now(UTC)
         await db.commit()
         await db.refresh(user)
 
@@ -129,6 +133,78 @@ class AuthService:
 
         tokens = await AuthService._issue_tokens(db, user, request_meta)
 
+        return {"user": user, **tokens}
+
+    @staticmethod
+    async def google_login(db: AsyncSession, email: str, full_name: str, avatar_url: str | None, request_meta: dict) -> dict:
+        email = email.lower()
+        result = await db.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
+
+        from app.models.progress import PlayerProgress
+        from app.models.user import Profile
+
+        if not user:
+            # Create a new user since they don't exist
+            user = User(
+                email=email,
+                full_name=full_name,
+                avatar_url=avatar_url,
+                role=UserRole.STUDENT,
+                status=UserStatus.ACTIVE,
+                is_verified=True,  # Google emails are verified
+                provider=AuthProvider.GOOGLE,
+                meta_data=request_meta,
+            )
+            db.add(user)
+            await db.flush()
+
+            base_username = email.split("@")[0]
+            # Ensure unique username
+            unique_username = base_username
+            counter = 1
+            while True:
+                existing_profile = await db.execute(select(Profile).where(Profile.username == unique_username))
+                if not existing_profile.scalar_one_or_none():
+                    break
+                unique_username = f"{base_username}{counter}"
+                counter += 1
+
+            db.add(Profile(user_id=user.id, username=unique_username, avatar_url=avatar_url))
+            db.add(PlayerProgress(user_id=user.id))
+
+            await db.commit()
+            await db.refresh(user)
+        else:
+            if user.locked_until and user.locked_until > datetime.now(UTC):
+                raise AccountLockedError("Account temporarily locked. Try again later.")
+            # Update provider if they previously signed up with email
+            if user.provider != AuthProvider.GOOGLE:
+                user.provider = AuthProvider.GOOGLE
+                user.is_verified = True
+
+            # Sync avatar if it changed or wasn't set
+            if avatar_url and user.avatar_url != avatar_url:
+                user.avatar_url = avatar_url
+                # We also need to update the profile avatar if it exists
+                profile = await db.execute(select(Profile).where(Profile.user_id == user.id))
+                profile = profile.scalar_one_or_none()
+                if profile:
+                    profile.avatar_url = avatar_url
+
+            await db.commit()
+
+        user.failed_login_attempts = 0
+        user.locked_until = None
+        user.last_login = datetime.now(UTC)
+        await db.commit()
+        await db.refresh(user)
+
+        await AuthService._record_login(
+            db, user.id, success=True, method="google", meta=request_meta
+        )
+
+        tokens = await AuthService._issue_tokens(db, user, request_meta)
         return {"user": user, **tokens}
 
     @staticmethod
@@ -154,7 +230,7 @@ class AuthService:
         await db.execute(
             update(Session)
             .where(Session.token == token, Session.is_revoked.is_(False))
-            .values(is_revoked=True, revoked_at=datetime.now(timezone.utc), revoked_by="user")
+            .values(is_revoked=True, revoked_at=datetime.now(UTC), revoked_by="user")
         )
         await db.commit()
 
@@ -167,7 +243,7 @@ class AuthService:
         if not session:
             raise NotFoundError("Session not found")
         session.is_revoked = True
-        session.revoked_at = datetime.now(timezone.utc)
+        session.revoked_at = datetime.now(UTC)
         session.revoked_by = "user"
         await db.commit()
 
@@ -207,7 +283,7 @@ class AuthService:
 
     @staticmethod
     async def _issue_tokens(db: AsyncSession, user: User, request_meta: dict) -> dict:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         access_token = create_access_token(str(user.id))
         refresh_token = create_refresh_token(str(user.id))
 
@@ -234,22 +310,25 @@ class AuthService:
     @staticmethod
     async def _record_login(
         db: AsyncSession,
-        user_id: Optional[UUID],
+        user_id: UUID | None,
         success: bool,
         method: str,
-        reason: Optional[str] = None,
+        reason: str | None = None,
         meta: dict | None = None,
     ) -> None:
         meta = meta or {}
-        db.add(
-            LoginHistory(
-                user_id=user_id,
-                success=success,
-                method=method,
-                failure_reason=reason,
-                ip_address=meta.get("ip_address"),
-                user_agent=meta.get("user_agent"),
-                location=meta.get("location"),
+        try:
+            db.add(
+                LoginHistory(
+                    user_id=user_id,
+                    success=success,
+                    method=method,
+                    failure_reason=reason,
+                    ip_address=meta.get("ip_address"),
+                    user_agent=meta.get("user_agent"),
+                    location=meta.get("location"),
+                )
             )
-        )
-        await db.commit()
+            await db.commit()
+        except Exception:
+            await db.rollback()

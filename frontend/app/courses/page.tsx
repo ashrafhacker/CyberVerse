@@ -354,7 +354,7 @@ export default function LearningPathsPage() {
                 </div>
               </div>
               <Link
-                href={`/register`}
+                href={`/register?redirect=${encodeURIComponent(`/courses/${activePath.courses[0]?.id}`)}`}
                 id={`enroll-${activePath.slug}`}
                 className="terminal-button inline-flex items-center gap-2 px-6 py-2.5"
                 style={{ backgroundColor: activePath.color, color: '#070a14' }}

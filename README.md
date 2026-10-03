@@ -86,6 +86,8 @@ python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env             # set SECRET_KEY + JWT_SECRET_KEY (min 32 chars)
+# AI mentor: add OPENROUTER_API_KEY (recommended) or OPENAI_API_KEY to .env
+# to enable real AI chat — without a key the mentor uses offline fallbacks.
 alembic upgrade head             # apply migrations
 
 # 3. Seed baseline content (admin: admin@cyberverse.io / ChangeMe123!)

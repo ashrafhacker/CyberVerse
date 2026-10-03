@@ -1,3 +1,4 @@
+from datetime import UTC
 from uuid import UUID
 
 from sqlalchemy import desc, func, select
@@ -11,24 +12,39 @@ from app.models.user import Profile, User
 class LeaderboardService:
     @staticmethod
     async def get_or_create_weekly(db: AsyncSession) -> Leaderboard:
-        from datetime import datetime, timedelta, timezone
+        return await LeaderboardService.get_or_create_board(db, "weekly")
 
-        now = datetime.now(timezone.utc)
-        start = now - timedelta(days=now.weekday())
-        start = start.replace(hour=0, minute=0, second=0, microsecond=0)
-        end = start + timedelta(days=7)
+    @staticmethod
+    async def get_or_create_board(db: AsyncSession, board_type: str) -> Leaderboard:
+        from datetime import datetime, timedelta
+
+        now = datetime.now(UTC)
+        if board_type == "all_time":
+            start = datetime(2000, 1, 1, tzinfo=UTC)
+            end = now + timedelta(days=3650)
+            name = "All-Time Leaderboard"
+        elif board_type == "monthly":
+            start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            end = (start + timedelta(days=32)).replace(day=1)
+            name = f"Monthly Leaderboard {start.strftime('%Y-%m')}"
+        else:  # weekly
+            board_type = "weekly"
+            start = now - timedelta(days=now.weekday())
+            start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = start + timedelta(days=7)
+            name = f"Weekly Leaderboard {start.strftime('%Y-%m-%d')}"
 
         result = await db.execute(
             select(Leaderboard).where(
-                Leaderboard.leaderboard_type == "weekly",
+                Leaderboard.leaderboard_type == board_type,
                 Leaderboard.period_start == start,
             )
         )
         board = result.scalar_one_or_none()
         if not board:
             board = Leaderboard(
-                leaderboard_type="weekly",
-                name=f"Weekly Leaderboard {start.strftime('%Y-%m-%d')}",
+                leaderboard_type=board_type,
+                name=name,
                 period_start=start,
                 period_end=end,
             )
@@ -95,7 +111,6 @@ class LeaderboardService:
     @staticmethod
     async def rebuild_board(db: AsyncSession, board: Leaderboard) -> int:
         """Recalculate leaderboard from player progress (for all-time / weekly boards)."""
-
         # Clear existing entries for this board
         from sqlalchemy import delete
         await db.execute(delete(LeaderboardEntry).where(LeaderboardEntry.leaderboard_id == board.id))

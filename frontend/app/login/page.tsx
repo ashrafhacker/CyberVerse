@@ -1,35 +1,50 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Shield, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { authErrorMessage, resolveLoginRedirect } from '@/lib/auth-utils';
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
+
+const GOOGLE_CLIENT_ID =
+  process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ??
+  '629472594859-dc64tio5cvcfq8g8f41igr1peu8mr2d6.apps.googleusercontent.com';
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { user, loading, login, googleLogin } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Once a valid session exists (either restored or just created by login),
+  // send the user back to the page they originally requested — never to a
+  // second login screen. This is the end of the redirect loop.
+  useEffect(() => {
+    if (loading || !user) return;
+    router.replace(resolveLoginRedirect());
+  }, [loading, user, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setLoading(true);
+    setSubmitting(true);
     try {
       await login(email, password);
-      router.push('/dashboard');
+      // Redirect handled by the effect above once `user` is set.
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      setError(authErrorMessage(err, 'Login failed'));
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-grid-pattern [background-size:40px_40px] bg-cyber-bg px-4">
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      <div className="flex min-h-screen items-center justify-center bg-grid-pattern [background-size:40px_40px] bg-cyber-bg px-4">
       <div className="w-full max-w-md">
         <div className="mb-8 flex items-center justify-center gap-2">
           <Shield className="h-10 w-10 text-cyber-primary" />
@@ -76,9 +91,36 @@ export default function LoginPage() {
             />
           </div>
 
-          <button type="submit" disabled={loading} className="terminal-button w-full py-2.5">
-            {loading ? 'Connecting...' : 'Access Terminal'}
+          <button type="submit" disabled={submitting} className="terminal-button w-full py-2.5 mb-4">
+            {submitting ? 'Connecting...' : 'Access Terminal'}
           </button>
+
+          <div className="mb-4 flex flex-col items-center gap-3">
+            <div className="flex w-full items-center gap-2">
+              <div className="h-px flex-1 bg-cyber-border"></div>
+              <span className="text-xs text-cyber-muted">OR</span>
+              <div className="h-px flex-1 bg-cyber-border"></div>
+            </div>
+            <GoogleLogin
+              onSuccess={async (credentialResponse) => {
+                if (!credentialResponse.credential) return;
+                setSubmitting(true);
+                setError(null);
+                try {
+                  await googleLogin(credentialResponse.credential);
+                  // Redirect handled by the effect above once `user` is set.
+                } catch (err) {
+                  setError(authErrorMessage(err, 'Google login failed'));
+                } finally {
+                  setSubmitting(false);
+                }
+              }}
+              onError={() => setError('Google sign-in was cancelled or failed. Please try again.')}
+              theme="filled_black"
+              shape="rectangular"
+              text="signin_with"
+            />
+          </div>
 
           <p className="mt-4 text-center text-sm text-cyber-muted">
             No account yet?{' '}
@@ -89,5 +131,6 @@ export default function LoginPage() {
         </form>
       </div>
     </div>
+    </GoogleOAuthProvider>
   );
 }

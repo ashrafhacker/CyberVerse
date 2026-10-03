@@ -1,12 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import CurrentUser, require_admin
+from app.api.deps import CurrentUser
 from app.core.database import get_db
 from app.models.premium import Coupon, Payment, Subscription, SubscriptionPlan
-from app.models.user import UserRole
 from app.schemas.base import APIResponse
 
 router = APIRouter()
@@ -158,14 +157,31 @@ async def checkout(
 
     final_amount = max(0, float(plan.price_amount) - discount)
 
-    # In production, create a Stripe Checkout Session here.
-    checkout_url = (
-        "https://buy.stripe.com/test_" + str(plan_id).replace("-", "")[:16]
-    )
+    amount_in_paise = int(final_amount * 100)
+    checkout_url = "https://rzp.io/i/dummy"
+
+    from app.core.config import settings
+    if settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET and not settings.RAZORPAY_KEY_ID.startswith("rzp_test_Your"):
+        import razorpay
+        client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+        payment_link = client.payment_link.create({
+            "amount": amount_in_paise,
+            "currency": plan.price_currency,
+            "description": f"CyberVerse {plan.name} Plan",
+            "customer": {
+                "name": getattr(user, "full_name", "Student"),
+                "email": user.email
+            },
+            "notify": {"email": True},
+            "callback_url": "http://localhost:3000/dashboard",
+            "callback_method": "get"
+        })
+        checkout_url = payment_link["short_url"]
 
     return APIResponse[dict](
         data={
             "checkout_url": checkout_url,
+            "razorpay_key_id": settings.RAZORPAY_KEY_ID or "",
             "amount": final_amount,
             "currency": plan.price_currency,
             "plan_name": plan.name,

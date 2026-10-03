@@ -1,7 +1,5 @@
 import logging
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional
-from uuid import uuid4
+from typing import Any, Optional
 
 import redis.asyncio as aioredis
 from fastapi import Request
@@ -12,7 +10,7 @@ from app.core.config import settings
 class RedisClient:
     """Async Redis client wrapper with cache helpers."""
 
-    _instance: Optional[aioredis.Redis] = None
+    _instance: aioredis.Redis | None = None
 
     @classmethod
     async def get_client(cls) -> aioredis.Redis:
@@ -34,12 +32,12 @@ class RedisClient:
             cls._instance = None
 
     @classmethod
-    async def get(cls, key: str) -> Optional[str]:
+    async def get(cls, key: str) -> str | None:
         client = await cls.get_client()
         return await client.get(key)
 
     @classmethod
-    async def set(cls, key: str, value: str, ttl: Optional[int] = None) -> None:
+    async def set(cls, key: str, value: str, ttl: int | None = None) -> None:
         client = await cls.get_client()
         if ttl:
             await client.set(key, value, ex=ttl)
@@ -52,7 +50,7 @@ class RedisClient:
         await client.delete(key)
 
     @classmethod
-    async def increment(cls, key: str, amount: int = 1, ttl: Optional[int] = None) -> int:
+    async def increment(cls, key: str, amount: int = 1, ttl: int | None = None) -> int:
         client = await cls.get_client()
         value = await client.incr(key, amount)
         if ttl and value == amount:
@@ -60,7 +58,7 @@ class RedisClient:
         return value
 
     @classmethod
-    async def cache_get_json(cls, key: str):
+    async def cache_get_json(cls, key: str) -> Any:
         value = await cls.get(key)
         if value:
             import json
@@ -68,7 +66,7 @@ class RedisClient:
         return None
 
     @classmethod
-    async def cache_set_json(cls, key: str, data: Any, ttl: Optional[int] = None) -> None:
+    async def cache_set_json(cls, key: str, data: Any, ttl: int | None = None) -> None:
         import json
         await cls.set(key, json.dumps(data, default=str), ttl=ttl)
 
@@ -78,7 +76,8 @@ async def get_redis() -> aioredis.Redis:
 
 
 class RateLimiter:
-    """Sliding window rate limiter backed by Redis.
+    """
+    Sliding window rate limiter backed by Redis.
 
     Fails OPEN: if Redis is unavailable the request is allowed through
     (availability over strictness), and the event is logged.
@@ -102,7 +101,7 @@ class RateLimiter:
             key = self.key_for(identifier, scope)
             current = await RedisClient.increment(key, 1, ttl=self.window_seconds)
             return current <= self.max_requests
-        except Exception:  # noqa: BLE001
+        except Exception:
             logging.getLogger(__name__).warning(
                 "rate_limit_redis_unavailable", exc_info=True
             )
@@ -119,8 +118,8 @@ class RateLimiter:
     def from_request(
         cls,
         request: Request,
-        max_requests: int = None,
-        window_seconds: int = None,
+        max_requests: Optional[int] = None,
+        window_seconds: Optional[int] = None,
     ) -> "RateLimiter":
         return cls(
             max_requests=max_requests or settings.RATE_LIMIT_REQUESTS,
@@ -131,8 +130,8 @@ class RateLimiter:
     async def check(
         cls,
         request: Request,
-        max_requests: int = None,
-        window_seconds: int = None,
+        max_requests: Optional[int] = None,
+        window_seconds: Optional[int] = None,
         scope: str = "default",
     ) -> bool:
         limiter = cls.from_request(request, max_requests, window_seconds)

@@ -1,22 +1,29 @@
 import enum
-from datetime import datetime, timezone
-from typing import Optional, Dict
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Optional
 from uuid import uuid4
 
 from sqlalchemy import (
-    String,
-    Text,
-    DateTime,
     Boolean,
-    Enum as SQLEnum,
+    DateTime,
     ForeignKey,
     Index,
+    String,
+    Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB
+from sqlalchemy import (
+    Enum as SQLEnum,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+if TYPE_CHECKING:
+    from app.models.user import User
+    from app.models.progress import Enrollment
 
 
 class CertificateType(str, enum.Enum):
@@ -41,7 +48,7 @@ class CertificateTemplate(Base):
     )
 
     id: Mapped[PGUUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
 
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
@@ -52,28 +59,28 @@ class CertificateTemplate(Base):
         nullable=False,
     )
 
-    background_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    logo_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    layout_config: Mapped[Dict] = mapped_column(JSONB, default=dict, nullable=False)
+    background_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    logo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    layout_config: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
 
     is_premium: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    metadata: Mapped[Dict] = mapped_column(JSONB, default=dict, nullable=False)
+    meta_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
 
-    courses: Mapped[list] = relationship("Course", back_populates="certificate_template")  # noqa: F821
+    courses: Mapped[list] = relationship("Course", back_populates="certificate_template")
     certificates: Mapped[list] = relationship("Certificate", back_populates="template")
 
 
@@ -98,16 +105,16 @@ class Certificate(Base):
         ForeignKey("certificate_templates.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    enrollment_id: Mapped[Optional[PGUUID]] = mapped_column(
+    enrollment_id: Mapped[PGUUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("enrollments.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     source_type: Mapped[str] = mapped_column(String(50), nullable=False)  # course, learning_path, mission
-    source_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    source_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
-    verification_code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    verification_code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     status: Mapped[CertificateStatus] = mapped_column(
         SQLEnum(CertificateStatus, native_enum=False),
         default=CertificateStatus.PENDING,
@@ -115,24 +122,24 @@ class Certificate(Base):
     )
 
     full_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    score: Mapped[Optional[int]] = mapped_column(nullable=True)
-    issued_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    revoked_reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    score: Mapped[int | None] = mapped_column(nullable=True)
+    issued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
-    pdf_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    metadata: Mapped[Dict] = mapped_column(JSONB, default=dict, nullable=False)
+    pdf_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    meta_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
 

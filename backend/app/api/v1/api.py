@@ -1,26 +1,40 @@
+"""
+CyberVerse API v1 Main Router.
+
+Aggregates all endpoint routers into the main v1 API router.
+"""
+
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
-    auth,
-    users,
-    profile,
-    progress,
-    missions,
-    courses,
-    lessons,
-    ai,
-    chat,
-    leaderboard,
-    notifications,
     admin,
-    instructor,
-    settings_router,
-    premium,
+    ai,
     analytics,
-    support,
+    arsenal,
+    auth,
+    certificates,
+    chat,
+    courses,
+    ctf,
+    game,
+    instructor,
+    labs,
+    leaderboard,
+    lessons,
     library,
     media,
-    labs,
+    missions,
+    notifications,
+    premium,
+    profile,
+    progress,
+    progression,
+    settings_router,
+    skill,
+    soc,
+    support,
+    threat_intel,
+    users,
 )
 
 api_router = APIRouter()
@@ -34,6 +48,7 @@ api_router.include_router(courses.router, prefix="/courses", tags=["Courses"])
 api_router.include_router(lessons.router, prefix="/lessons", tags=["Lessons"])
 api_router.include_router(ai.router, prefix="/ai", tags=["AI"])
 api_router.include_router(chat.router, prefix="/chat", tags=["Chat"])
+api_router.include_router(game.router, prefix="/game", tags=["Game"])
 api_router.include_router(leaderboard.router, prefix="/leaderboard", tags=["Leaderboard"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["Notifications"])
 api_router.include_router(admin.router, prefix="/admin", tags=["Admin"])
@@ -41,7 +56,14 @@ api_router.include_router(instructor.router, prefix="/instructor", tags=["Instru
 api_router.include_router(settings_router.router, prefix="/settings", tags=["Settings"])
 api_router.include_router(premium.router, prefix="/premium", tags=["Premium"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["Analytics"])
-api_router.include_router(support.router, prefix="/support", tags=["Support"])
+api_router.include_router(arsenal.router, prefix="/arsenal", tags=["Arsenal"])
+api_router.include_router(certificates.router, prefix="/certificates", tags=["Certificates"])
+api_router.include_router(ctf.router, prefix="/ctf", tags=["CTF"])
+api_router.include_router(labs.router, prefix="/labs", tags=["Labs"])
 api_router.include_router(library.router, prefix="/library", tags=["Library"])
+api_router.include_router(progression.router, prefix="/progression", tags=["Progression"])
+api_router.include_router(skill.router, prefix="/skills", tags=["Skills"])
+api_router.include_router(soc.router, prefix="/soc", tags=["SOC"])
+api_router.include_router(support.router, prefix="/support", tags=["Support"])
+api_router.include_router(threat_intel.router, prefix="/threat-intel", tags=["Threat Intelligence"])
 api_router.include_router(media.router, prefix="/media", tags=["Media"])
-api_router.include_router(labs.router, prefix="/labs", tags=["CyberVerse Labs"])

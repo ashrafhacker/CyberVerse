@@ -1,0 +1,50 @@
+[gd_scene load_steps=6 format=3 uid="uid://csoc001"]
+
+[ext_resource type="Script" path="res://scripts/soc.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/player.gd" id="2"]
+[ext_resource type="Script" path="res://scripts/terminal.gd" id="3"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_p"]
+radius = 0.4
+height = 1.8
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_f"]
+size = Vector3(30, 1, 30)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_t"]
+size = Vector3(1, 1.2, 0.3)
+
+[node name="SOC" type="Node3D"]
+script = ExtResource("1")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.8660254, 0, -0.5, 0, 1, 0, 0.5, 0, 0.8660254, 0, 10, 0)
+light_energy = 1.2
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+
+[node name="Floor" type="StaticBody3D" parent="."]
+
+[node name="FloorShape" type="CollisionShape3D" parent="Floor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+shape = SubResource("BoxShape3D_f")
+
+[node name="Player" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 4)
+script = ExtResource("2")
+
+[node name="PlayerShape" type="CollisionShape3D" parent="Player"]
+shape = SubResource("CapsuleShape3D_p")
+
+[node name="CameraPivot" type="Node3D" parent="Player"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
+
+[node name="InteractRay" type="RayCast3D" parent="Player"]
+target_position = Vector3(0, 1.2, -2)
+
+[node name="Terminal" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+script = ExtResource("3")
+
+[node name="TerminalShape" type="CollisionShape3D" parent="Terminal"]
+shape = SubResource("BoxShape3D_t")

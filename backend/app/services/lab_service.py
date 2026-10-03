@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import ipaddress
-import random
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -24,6 +23,8 @@ from app.models.lab import (
     LabSessionStatus,
 )
 from app.models.user import User
+from app.services.lab_missions import ALL_MISSIONS
+from app.services.lab_scenario_gen import generate_realistic_scenario
 
 
 class LabSafetyError(ValueError):
@@ -43,68 +44,7 @@ class LabService:
         ("network-defense", "Network Defense Lab", "Perform asset discovery, hardening, detection, incident response, and recovery planning.", "network_defense", "LVL_NetworkDefense"),
     ]
 
-    DEFAULT_SOC_TEMPLATE = {
-        "slug": "soc-suspicious-login-triage",
-        "title": "Suspicious Login Triage",
-        "mission_type": "incident_response",
-        "difficulty": "beginner",
-        "estimated_minutes": 25,
-        "story_context": (
-            "A fictional manufacturing company reports an impossible-travel sign-in followed by suspicious "
-            "mailbox activity. Triage the alert, collect evidence, contain the account, and write a short report."
-        ),
-        "objectives": [
-            {
-                "id": "obj-triage-alert",
-                "title": "Triage the alert",
-                "required_evidence": ["alert-impossible-travel"],
-                "required_actions": [],
-                "xp": 50,
-            },
-            {
-                "id": "obj-confirm-compromise",
-                "title": "Confirm account compromise",
-                "required_evidence": ["auth-log-impossible-travel", "mailbox-rule-created"],
-                "required_actions": [],
-                "xp": 80,
-            },
-            {
-                "id": "obj-contain-account",
-                "title": "Contain the affected identity",
-                "required_evidence": ["auth-log-impossible-travel"],
-                "required_actions": ["disable_identity", "revoke_sessions"],
-                "xp": 100,
-            },
-        ],
-        "tools": [
-            {"id": "soc-dashboard", "name": "Live Security Dashboard", "type": "dashboard"},
-            {"id": "soc-siem", "name": "Simulated SIEM", "type": "siem"},
-            {"id": "endpoint-console", "name": "Endpoint Monitoring", "type": "endpoint"},
-            {"id": "email-security", "name": "Email Security Console", "type": "email"},
-            {"id": "case-management", "name": "Case Management", "type": "case"},
-        ],
-        "evidence_blueprint": [
-            {"key": "alert-impossible-travel", "title": "Impossible travel alert", "type": "alert", "required": True},
-            {"key": "auth-log-impossible-travel", "title": "Authentication log pivot", "type": "log", "required": True},
-            {"key": "mailbox-rule-created", "title": "Suspicious mailbox forwarding rule", "type": "email", "required": True},
-            {"key": "endpoint-clean-check", "title": "Endpoint process review", "type": "endpoint", "required": False},
-        ],
-        "scoring_rubric": {
-            "objective_points": 80,
-            "evidence_points": 10,
-            "report_points": 10,
-            "hint_penalty": 5,
-        },
-        "debrief_rubric": {
-            "summary": "Alert triage, identity investigation, email review, containment, and report writing.",
-            "career": "SOC Tier 1 and incident response fundamentals.",
-        },
-        "safety_rules": {
-            "fictional_only": True,
-            "no_public_targets": True,
-            "no_real_malware": True,
-        },
-    }
+    DEFAULT_SLUG = "soc-suspicious-login-triage"
 
     @classmethod
     async def ensure_default_content(cls, db: AsyncSession) -> None:
@@ -127,15 +67,18 @@ class LabService:
             facility_by_slug[slug] = facility
 
         await db.flush()
-        soc = facility_by_slug["soc"]
-        db.add(
-            LabMissionTemplate(
-                facility_id=soc.id,
-                is_published=True,
-                generation_rules={"company_sizes": ["small", "mid_market"], "industries": ["manufacturing", "finance", "healthcare"]},
-                **cls.DEFAULT_SOC_TEMPLATE,
-            )
-        )
+        for facility_slug, missions in ALL_MISSIONS.items():
+            facility = facility_by_slug.get(facility_slug)
+            if not facility:
+                continue
+            for template_data in missions:
+                db.add(
+                    LabMissionTemplate(
+                        facility_id=facility.id,
+                        is_published=True,
+                        **template_data,
+                    )
+                )
         await db.commit()
 
     @classmethod
@@ -164,7 +107,7 @@ class LabService:
         elif mission_slug:
             result = await db.execute(select(LabMissionTemplate).where(LabMissionTemplate.slug == mission_slug))
         else:
-            result = await db.execute(select(LabMissionTemplate).where(LabMissionTemplate.slug == cls.DEFAULT_SOC_TEMPLATE["slug"]))
+            result = await db.execute(select(LabMissionTemplate).where(LabMissionTemplate.slug == cls.DEFAULT_SLUG))
         template = result.scalar_one_or_none()
         if not template or not template.is_published:
             raise LookupError("Lab mission not found")
@@ -268,90 +211,13 @@ class LabService:
 
     @classmethod
     def generate_scenario(cls, template: LabMissionTemplate, seed: str) -> dict:
-        rng = random.Random(seed)
-        industries = template.generation_rules.get("industries") or ["manufacturing", "finance", "healthcare"]
-        company_roots = ["Northstar", "Blue Harbor", "Summit Vale", "Copperline", "Aster Ridge"]
-        suffixes = ["Fabrication Group", "Health Network", "Credit Union", "Logistics", "Research Labs"]
-        company = {
-            "name": f"{rng.choice(company_roots)} {rng.choice(suffixes)}",
-            "industry": rng.choice(industries),
-            "size": rng.choice(template.generation_rules.get("company_sizes") or ["small", "mid_market"]),
-            "region": "fictional-us-east",
-        }
-        user_number = rng.randint(21, 89)
-        affected_user = {
-            "id": f"user-{user_number:03}",
-            "display_name": rng.choice(["Maya Chen", "Jordan Ellis", "Rina Patel", "Owen Brooks"]),
-            "role": rng.choice(["Finance Manager", "HR Coordinator", "Operations Lead"]),
-            "department": rng.choice(["Finance", "Human Resources", "Operations"]),
-            "email": f"user{user_number}@{company['name'].lower().replace(' ', '-')}.cyberverse.test",
-        }
-        workstation = {
-            "id": "asset-001",
-            "hostname": f"{company['name'].split()[0].lower()}-hq-wks-{rng.randint(10,99)}",
-            "type": "windows_workstation",
-            "ip_address": f"10.{rng.randint(10, 40)}.{rng.randint(0, 10)}.{rng.randint(20, 220)}",
-            "location": "hq-floor-2",
-            "criticality": "medium",
-            "owner_user_id": affected_user["id"],
-            "services": ["edr_agent", "office_suite", "vpn_client"],
-            "tags": ["managed", affected_user["department"].lower().replace(" ", "-")],
-        }
-        alerts = [
-            {
-                "id": "alert-001",
-                "title": "Impossible travel followed by mailbox rule creation",
-                "severity": "high",
-                "source": "identity",
-                "asset_id": workstation["id"],
-                "user_id": affected_user["id"],
-                "status": "open",
-            }
-        ]
-        logs = [
-            {"id": "log-auth-001", "type": "auth", "source_ip": "198.51.100.44", "result": "success", "user_id": affected_user["id"]},
-            {"id": "log-mail-001", "type": "email", "event": "mailbox_rule_created", "user_id": affected_user["id"]},
-        ]
-        evidence = []
-        for item in template.evidence_blueprint:
-            evidence.append(
-                {
-                    **item,
-                    "id": f"ev-{item['key']}",
-                    "source_tool": cls.source_tool_for_evidence(item["type"]),
-                    "source_asset_id": workstation["id"],
-                    "fictional": True,
-                }
-            )
-        return {
-            "company_profile": company,
-            "topology": {
-                "sites": ["headquarters", "branch-office", "cloud-tenant"],
-                "segments": ["corp", "server", "vpn", "cloud"],
-                "edges": [["vpn", "corp"], ["corp", "server"], ["server", "cloud"]],
-            },
-            "assets": [workstation],
-            "identities": [affected_user],
-            "logs": logs,
-            "alerts": alerts,
-            "evidence": evidence,
+        """Generate a realistic, fictional scenario using the facility-aware generator."""
+        template_data = {
             "objectives": template.objectives,
-            "safety_metadata": {
-                "fictional_only": True,
-                "uses_reserved_domains": True,
-                "contains_real_malware": False,
-                "targets_public_internet": False,
-            },
+            "evidence_blueprint": template.evidence_blueprint,
+            "generation_rules": template.generation_rules or {},
         }
-
-    @staticmethod
-    def source_tool_for_evidence(evidence_type: str) -> str:
-        return {
-            "alert": "soc-dashboard",
-            "log": "soc-siem",
-            "email": "email-security",
-            "endpoint": "endpoint-console",
-        }.get(evidence_type, "case-management")
+        return generate_realistic_scenario(template_data, seed)
 
     @classmethod
     def validate_scenario(cls, scenario: dict) -> list[str]:
@@ -388,7 +254,25 @@ class LabService:
 
     @staticmethod
     def hash_payload(payload: dict) -> str:
-        return hashlib.sha256(repr(sorted(payload.items())).encode()).hexdigest()
+        """
+        Canonical, order-independent content hash for forensic evidence integrity.
+
+        Uses a stable sort on keys so that identical logical evidence always hashes
+        to the same value regardless of insertion order or nested dict ordering.
+        """
+        import json
+
+        def _canonical(obj):
+            if isinstance(obj, dict):
+                return {k: _canonical(v) for k, v in sorted(obj.items(), key=lambda kv: str(kv[0]))}
+            if isinstance(obj, (list, tuple)):
+                return [_canonical(v) for v in obj]
+            return obj
+
+        canonical = json.dumps(
+            _canonical(payload), sort_keys=True, separators=(",", ":"), default=str
+        )
+        return hashlib.sha256(canonical.encode()).hexdigest()
 
     @classmethod
     async def get_session_for_user(cls, db: AsyncSession, session_id: UUID, user: User) -> LabSession:
@@ -410,12 +294,77 @@ class LabService:
             "topology": scenario.topology,
             "assets": scenario.generated_assets,
             "identities": scenario.generated_identities,
+            "logs": scenario.generated_logs,
             "alerts": scenario.generated_alerts,
             "evidence": scenario.generated_evidence,
             "objectives": scenario.generated_objectives,
             "tool_manifest": template.tools,
             "safety_metadata": scenario.safety_metadata,
         }
+
+    @classmethod
+    async def analyze_session(cls, db: AsyncSession, session: LabSession, user: User) -> dict:
+        """
+        Run the deterministic Neo Analysis correlation over a lab session.
+
+        Correlates the scenario's logs/alerts/evidence with the player's
+        collected evidence and recorded events into a narrative analyst view.
+        The result is cached on the session's ``extra_data`` and returned.
+        """
+        scenario = await db.get(LabScenarioInstance, session.scenario_id)
+        if not scenario:
+            raise LookupError("Lab scenario not found")
+
+        # Collected evidence keys
+        evidence_result = await db.execute(
+            select(LabEvidenceItem).where(
+                LabEvidenceItem.session_id == session.id,
+                LabEvidenceItem.collected_at.is_not(None),
+            )
+        )
+        collected_keys = {
+            item.evidence_key for item in evidence_result.scalars().all()
+        }
+
+        # Player-recorded events (tool usage / commands)
+        events_result = await db.execute(
+            select(LabEvent).where(LabEvent.session_id == session.id).order_by(LabEvent.server_time)
+        )
+        event_log = [
+            {
+                "event_type": e.event_type,
+                "tool_id": e.tool_id,
+                "target_id": e.target_id,
+                "payload": e.payload,
+                "server_time": e.server_time.isoformat() if e.server_time else None,
+            }
+            for e in events_result.scalars().all()
+        ]
+
+        from app.services.neo_analysis_service import NeoAnalysisService
+
+        analysis = NeoAnalysisService.analyze(
+            scenario={
+
+                    "company_profile": scenario.company_profile,
+                    "facility": session.current_facility_slug,
+                    "assets": scenario.generated_assets,
+                    "identities": scenario.generated_identities,
+                    "logs": scenario.generated_logs,
+                    "alerts": scenario.generated_alerts,
+                    "evidence": scenario.generated_evidence
+
+            },
+            collected_keys=collected_keys,
+            event_log=event_log,
+            objective_state=session.objective_state,
+        )
+
+        # Cache the latest analysis on the session metadata (lightweight replay cache).
+        session.extra_data = {**(session.extra_data or {}), "neo_analysis": analysis}
+        await cls.audit(db, user.id, "lab.analysis.generated", "lab_session", str(session.id), True)
+        await db.commit()
+        return analysis
 
     @classmethod
     async def record_event(cls, db: AsyncSession, session: LabSession, user: User, event_data: dict) -> LabEvent:
@@ -438,7 +387,7 @@ class LabService:
             raise LookupError("Evidence not found")
         if not evidence.collected_at:
             evidence.collected_by = user.id
-            evidence.collected_at = datetime.now(timezone.utc)
+            evidence.collected_at = datetime.now(UTC)
             evidence.custody = [{"user_id": str(user.id), "action": "collected", "at": evidence.collected_at.isoformat()}]
             await cls.audit(db, user.id, "lab.evidence.collected", "lab_evidence", str(evidence.id), True)
             await db.commit()
@@ -472,6 +421,19 @@ class LabService:
     @classmethod
     async def submit_report(cls, db: AsyncSession, session: LabSession, user: User, report_data: dict) -> LabReport:
         report = LabReport(session_id=session.id, user_id=user.id, **report_data)
+        try:
+            analysis = await cls.analyze_session(db, session, user)
+            report.mentor_feedback = {
+                "analyst": "Neo",
+                "generated_with": analysis.get("generated_with"),
+                "overview": analysis.get("overview"),
+                "confidence": analysis.get("confidence"),
+                "coverage": analysis.get("coverage"),
+                "predominant_phase": analysis.get("predominant_phase"),
+                "recommendations": analysis.get("recommendations", []),
+            }
+        except Exception:
+            report.mentor_feedback = {}
         db.add(report)
         await cls.audit(db, user.id, "lab.report.submitted", "lab_report", str(session.id), True)
         await db.commit()
@@ -480,6 +442,7 @@ class LabService:
 
     @classmethod
     async def complete_session(cls, db: AsyncSession, session: LabSession, user: User) -> dict:
+        already_completed = session.status == LabSessionStatus.COMPLETED.value
         completed = sum(1 for status in (session.objective_state or {}).values() if status == "completed")
         total = max(len(session.objective_state or {}), 1)
         score = round((completed / total) * 90)
@@ -487,17 +450,36 @@ class LabService:
         if report_result.scalar_one_or_none():
             score = min(100, score + 10)
         session.status = LabSessionStatus.COMPLETED.value
-        session.completed_at = datetime.now(timezone.utc)
+        session.completed_at = datetime.now(UTC)
         session.score = score
         session.xp_awarded = score * 5
         session.coins_awarded = score
         await cls.audit(db, user.id, "lab.session.completed", "lab_session", str(session.id), True)
+
+        if not already_completed and score > 0:
+            from app.services.progress_service import ProgressService
+
+            progress = await ProgressService.get_or_create_player_progress(db, user.id)
+            progress.labs_completed += 1
+            await ProgressService.award_xp(
+                db, user.id, xp=session.xp_awarded, coins=session.coins_awarded
+            )
+
+        # Generate the Neo Analysis debrief (deterministic, offline-safe) so the
+        # debrief/feed includes a correlated analyst narrative.
+        if not (session.extra_data or {}).get("neo_analysis"):
+            try:
+                await cls.analyze_session(db, session, user)
+            except Exception:
+                pass
+
         await db.commit()
         return cls.debrief_payload(session)
 
     @staticmethod
     def debrief_payload(session: LabSession) -> dict:
         score = session.score or 0
+        neo = (session.extra_data or {}).get("neo_analysis") or {}
         return {
             "score": score,
             "grade": "A" if score >= 85 else "B" if score >= 70 else "C" if score >= 55 else "Needs Practice",
@@ -508,6 +490,17 @@ class LabService:
             "learning_summary": "You practiced defensive triage, evidence handling, containment, and reporting.",
             "recommended_lessons": ["identity-security-basics", "incident-response-fundamentals"],
             "career_feedback": "This maps to SOC analyst and incident response workflows.",
+            "neo_analysis": {
+                "overview": neo.get("overview"),
+                "confidence": neo.get("confidence"),
+                "coverage": neo.get("coverage"),
+                "predominant_phase": neo.get("predominant_phase"),
+                "timeline_count": len(neo.get("timeline") or []),
+                "kill_chain_phases": [
+                    {"label": ks.get("label"), "event_count": ks.get("event_count")}
+                    for ks in (neo.get("kill_chain") or [])
+                ],
+            } if neo else None,
         }
 
     @classmethod
@@ -527,7 +520,7 @@ class LabService:
         attestation = LabHomeAttestation(
             user_id=user.id,
             acknowledged=True,
-            acknowledged_at=datetime.now(timezone.utc),
+            acknowledged_at=datetime.now(UTC),
             attestation_text=text,
             ip_address=ip_address,
             user_agent=user_agent,

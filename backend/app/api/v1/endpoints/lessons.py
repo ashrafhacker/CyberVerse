@@ -1,10 +1,10 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import CurrentUser
+from app.api.deps import CurrentUser, OptionalUser
 from app.core.database import get_db
 from app.models.course import Lesson, Module, Quiz, QuizAttempt, QuizQuestion
 from app.schemas.base import APIResponse
@@ -15,7 +15,7 @@ router = APIRouter()
 @router.get("/{lesson_id}", response_model=APIResponse[dict], summary="Get lesson content")
 async def get_lesson(
     lesson_id: UUID,
-    user: CurrentUser,
+    _user: OptionalUser,
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(Lesson).where(Lesson.id == lesson_id))

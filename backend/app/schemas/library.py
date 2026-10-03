@@ -1,4 +1,3 @@
-from typing import List, Optional
 
 from pydantic import Field
 
@@ -13,10 +12,10 @@ class ResourceCreate(BaseSchema):
     category: str = Field(min_length=2, max_length=50)
     resource_type: ResourceType = ResourceType.ARTICLE
     difficulty: DifficultyLevel = DifficultyLevel.BEGINNER
-    provider: Optional[str] = Field(None, max_length=100)
-    url: Optional[str] = Field(None, max_length=500)
-    file_path: Optional[str] = Field(None, max_length=500)
-    duration_minutes: Optional[int] = Field(None, ge=1, le=100000)
-    tags: List[str] = Field(default_factory=list)
+    provider: str | None = Field(None, max_length=100)
+    url: str | None = Field(None, max_length=500)
+    file_path: str | None = Field(None, max_length=500)
+    duration_minutes: int | None = Field(None, ge=1, le=100000)
+    tags: list[str] = Field(default_factory=list)
     is_free: bool = True
     is_published: bool = False

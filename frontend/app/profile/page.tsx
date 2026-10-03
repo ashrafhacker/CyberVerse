@@ -4,12 +4,12 @@ import { useEffect, useState } from 'react';
 import { User as UserIcon, BadgeCheck } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { TerminalCard, StatCard, XPBar, LoadingScreen } from '@/components/TerminalCard';
-import { useAuth } from '@/lib/auth';
+import { useRequireAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
 import type { Profile } from '@/lib/types';
 
 export default function ProfilePage() {
-  const { user, loading } = useAuth();
+  const { user, loading } = useRequireAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState<string | null>(null);
 

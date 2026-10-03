@@ -1,4 +1,3 @@
-from typing import Any, Optional
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,11 +11,11 @@ class AuditService:
         db: AsyncSession,
         action: str,
         resource_type: str,
-        resource_id: Optional[str] = None,
-        user_id: Optional[UUID] = None,
-        before: Optional[dict] = None,
-        after: Optional[dict] = None,
-        meta: Optional[dict] = None,
+        resource_id: str | None = None,
+        user_id: UUID | None = None,
+        before: dict | None = None,
+        after: dict | None = None,
+        meta: dict | None = None,
         commit: bool = True,
     ) -> AuditLog:
         entry = AuditLog(

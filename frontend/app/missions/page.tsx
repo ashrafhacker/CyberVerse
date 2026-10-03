@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Swords, Play } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { TerminalCard, LoadingScreen } from '@/components/TerminalCard';
-import { useAuth } from '@/lib/auth';
+import { useRequireAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
 import type { DailyChallenge, Mission } from '@/lib/types';
 
@@ -16,7 +16,7 @@ const difficultyColors: Record<string, string> = {
 };
 
 export default function MissionsPage() {
-  const { user, loading } = useAuth();
+  const { user, loading } = useRequireAuth();
   const [missions, setMissions] = useState<Mission[]>([]);
   const [daily, setDaily] = useState<DailyChallenge[]>([]);
   const [error, setError] = useState<string | null>(null);

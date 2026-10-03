@@ -1,29 +1,42 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Shield, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { authErrorMessage, resolveLoginRedirect } from '@/lib/auth-utils';
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
+
+const GOOGLE_CLIENT_ID =
+  process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ??
+  '629472594859-dc64tio5cvcfq8g8f41igr1peu8mr2d6.apps.googleusercontent.com';
 
 export default function RegisterPage() {
-  const { register } = useAuth();
+  const { user, loading, register, googleLogin } = useAuth();
   const router = useRouter();
   const [form, setForm] = useState({ fullName: '', username: '', email: '', password: '' });
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // If a session already exists, do not show the registration form — return the
+  // user to their intended destination (or the dashboard).
+  useEffect(() => {
+    if (loading || !user) return;
+    router.replace(resolveLoginRedirect());
+  }, [loading, user, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setLoading(true);
+    setSubmitting(true);
     try {
       await register(form.email, form.password, form.fullName, form.username);
-      router.push('/dashboard');
+      // Redirect handled by the effect above once `user` is set.
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Registration failed');
+      setError(authErrorMessage(err, 'Registration failed'));
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -31,7 +44,8 @@ export default function RegisterPage() {
     setForm((f) => ({ ...f, [key]: e.target.value }));
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-grid-pattern [background-size:40px_40px] bg-cyber-bg px-4 py-10">
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      <div className="flex min-h-screen items-center justify-center bg-grid-pattern [background-size:40px_40px] bg-cyber-bg px-4 py-10">
       <div className="w-full max-w-md">
         <div className="mb-8 flex items-center justify-center gap-2">
           <Shield className="h-10 w-10 text-cyber-primary" />
@@ -70,9 +84,36 @@ export default function RegisterPage() {
             <input id="password" type="password" required minLength={8} value={form.password} onChange={update('password')} className="terminal-input" placeholder="min. 8 characters" autoComplete="new-password" />
           </div>
 
-          <button type="submit" disabled={loading} className="terminal-button w-full py-2.5">
-            {loading ? 'Creating profile...' : 'Join CyberVerse'}
+          <button type="submit" disabled={submitting} className="terminal-button w-full py-2.5 mb-4">
+            {submitting ? 'Creating profile...' : 'Join CyberVerse'}
           </button>
+
+          <div className="mb-4 flex flex-col items-center gap-3">
+            <div className="flex w-full items-center gap-2">
+              <div className="h-px flex-1 bg-cyber-border"></div>
+              <span className="text-xs text-cyber-muted">OR</span>
+              <div className="h-px flex-1 bg-cyber-border"></div>
+            </div>
+            <GoogleLogin
+              onSuccess={async (credentialResponse) => {
+                if (!credentialResponse.credential) return;
+                setSubmitting(true);
+                setError(null);
+                try {
+                  await googleLogin(credentialResponse.credential);
+                  // Redirect handled by the effect above once `user` is set.
+                } catch (err) {
+                  setError(authErrorMessage(err, 'Google sign-up failed'));
+                } finally {
+                  setSubmitting(false);
+                }
+              }}
+              onError={() => setError('Google sign-up was cancelled or failed. Please try again.')}
+              theme="filled_black"
+              shape="rectangular"
+              text="signup_with"
+            />
+          </div>
 
           <p className="mt-4 text-center text-sm text-cyber-muted">
             Already have an account?{' '}
@@ -83,5 +124,6 @@ export default function RegisterPage() {
         </form>
       </div>
     </div>
+    </GoogleOAuthProvider>
   );
 }

@@ -1,9 +1,8 @@
 from datetime import datetime
-from typing import Optional, List
-from uuid import UUID
 from enum import Enum
+from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class UserRole(str, Enum):
@@ -36,9 +35,10 @@ class RegisterRequest(BaseModel):
     password: str = Field(..., min_length=8, max_length=128)
     confirm_password: str
     full_name: str = Field(..., min_length=1, max_length=100)
+    username: str = Field(..., min_length=3, max_length=50)
     accept_terms: bool = True
     accept_privacy: bool = True
-    referral_code: Optional[str] = None
+    referral_code: str | None = None
 
     def passwords_match(self) -> bool:
         return self.password == self.confirm_password
@@ -48,8 +48,8 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str
     remember_me: bool = False
-    totp_code: Optional[str] = None
-    backup_code: Optional[str] = None
+    totp_code: str | None = None
+    backup_code: str | None = None
 
 
 class TokenResponse(BaseModel):
@@ -97,7 +97,7 @@ class ChangePasswordRequest(BaseModel):
 class Enable2FAResponse(BaseModel):
     secret: str
     qr_code: str
-    backup_codes: List[str]
+    backup_codes: list[str]
 
 
 class Verify2FARequest(BaseModel):
@@ -106,15 +106,18 @@ class Verify2FARequest(BaseModel):
 
 class Disable2FARequest(BaseModel):
     password: str
-    code: Optional[str] = None
-    backup_code: Optional[str] = None
+    code: str | None = None
+    backup_code: str | None = None
 
+
+class GoogleLoginRequest(BaseModel):
+    credential: str
 
 class OAuthLoginRequest(BaseModel):
     provider: AuthProvider
     code: str
     redirect_uri: str
-    state: Optional[str] = None
+    state: str | None = None
 
 
 class DeviceInfo(BaseModel):
@@ -124,7 +127,7 @@ class DeviceInfo(BaseModel):
     browser: str
     os: str
     ip_address: str
-    location: Optional[str] = None
+    location: str | None = None
     last_active: datetime
     is_current: bool = False
 
@@ -143,13 +146,13 @@ class UserResponse(BaseModel):
     id: UUID
     email: EmailStr
     full_name: str
-    avatar_url: Optional[str] = None
+    avatar_url: str | None = None
     role: UserRole
     status: UserStatus
     is_verified: bool
     is_2fa_enabled: bool
     provider: AuthProvider
-    last_login: Optional[datetime] = None
+    last_login: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -158,8 +161,8 @@ class UserProfileResponse(UserResponse):
     xp: int = 0
     coins: int = 0
     level: int = 1
-    rank: Optional[str] = None
-    titles: List[str] = []
-    badges: List[str] = []
+    rank: str | None = None
+    titles: list[str] = []
+    badges: list[str] = []
     statistics: dict = {}
     preferences: dict = {}

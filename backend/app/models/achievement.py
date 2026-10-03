@@ -1,23 +1,29 @@
 import enum
-from datetime import datetime, timezone
-from typing import Optional, List, Dict
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from sqlalchemy import (
-    String,
-    Text,
-    Integer,
-    DateTime,
     Boolean,
-    Enum as SQLEnum,
+    DateTime,
     ForeignKey,
     Index,
+    Integer,
+    String,
+    Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB, ARRAY
+from sqlalchemy import (
+    Enum as SQLEnum,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 class AchievementCategory(str, enum.Enum):
@@ -37,7 +43,7 @@ class Achievement(Base):
     )
 
     id: Mapped[PGUUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
 
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
@@ -47,7 +53,7 @@ class Achievement(Base):
         nullable=False,
     )
 
-    icon: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    icon: Mapped[str | None] = mapped_column(String(100), nullable=True)
     rarity: Mapped[str] = mapped_column(String(50), default="common", nullable=False)  # common, rare, epic, legendary
 
     xp_reward: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -55,26 +61,26 @@ class Achievement(Base):
 
     criteria_type: Mapped[str] = mapped_column(String(50), nullable=False)
     criteria_value: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    criteria_metadata: Mapped[Dict] = mapped_column(JSONB, default=dict, nullable=False)
+    criteria_meta_data: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
 
     is_hidden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_seasonal: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
-    metadata: Mapped[Dict] = mapped_column(JSONB, default=dict, nullable=False)
+    meta_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
 
-    user_achievements: Mapped[List["UserAchievement"]] = relationship(
+    user_achievements: Mapped[list["UserAchievement"]] = relationship(
         "UserAchievement", back_populates="achievement", cascade="all, delete-orphan"
     )
 
@@ -102,19 +108,19 @@ class UserAchievement(Base):
 
     progress: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     unlocked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    unlocked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    unlocked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    metadata: Mapped[Dict] = mapped_column(JSONB, default=dict, nullable=False)
+    meta_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
 
@@ -130,25 +136,25 @@ class DailyChallenge(Base):
     )
 
     id: Mapped[PGUUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    challenge_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    challenge_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
 
     task_type: Mapped[str] = mapped_column(String(50), nullable=False)  # lesson, quiz, mission, lab, social
     task_requirement: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    task_metadata: Mapped[Dict] = mapped_column(JSONB, default=dict, nullable=False)
+    task_metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
 
     xp_reward: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
     coins_reward: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    metadata: Mapped[Dict] = mapped_column(JSONB, default=dict, nullable=False)
+    meta_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
 
@@ -161,13 +167,13 @@ class WeeklyChallenge(Base):
     )
 
     id: Mapped[PGUUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    start_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    start_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     end_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
 
-    objectives: Mapped[List[Dict]] = mapped_column(JSONB, default=list, nullable=False)
+    objectives: Mapped[list[dict]] = mapped_column(JSONB, default=list, nullable=False)
 
     xp_reward: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
     coins_reward: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
@@ -175,10 +181,10 @@ class WeeklyChallenge(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_premium: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
-    metadata: Mapped[Dict] = mapped_column(JSONB, default=dict, nullable=False)
+    meta_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )

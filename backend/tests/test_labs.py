@@ -4,6 +4,7 @@ async def register_and_auth(client, email="labs@test.io", username="labs_user"):
         json={
             "email": email,
             "password": "StrongPass123!",
+            "confirm_password": "StrongPass123!",
             "full_name": "Labs Tester",
             "username": username,
         },

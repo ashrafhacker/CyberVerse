@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { BookOpen, Loader2, Search, Shield } from 'lucide-react';
+import { BookOpen, Loader2, Search, Shield, ShieldAlert } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import ResourceCard, { type LibraryItem } from '@/components/ResourceCard';
 import { api } from '@/lib/api';
@@ -28,11 +28,20 @@ export default function LibraryPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [filters, setFilters] = useState<LibraryFilters>({ categories: [], resource_types: [], difficulties: [] });
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [category, setCategory] = useState('');
   const [resourceType, setResourceType] = useState('');
   const [difficulty, setDifficulty] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [search]);
 
   useEffect(() => {
     api
@@ -44,7 +53,7 @@ export default function LibraryPage() {
   const load = useCallback(() => {
     setLoading(true);
     const params = new URLSearchParams({ page: String(page), page_size: '12' });
-    if (search) params.set('search', search);
+    if (debouncedSearch) params.set('search', debouncedSearch);
     if (category) params.set('category', category);
     if (resourceType) params.set('resource_type', resourceType);
     if (difficulty) params.set('difficulty', difficulty);
@@ -58,7 +67,7 @@ export default function LibraryPage() {
       })
       .catch(() => setError('Failed to load the library — are you logged in?'))
       .finally(() => setLoading(false));
-  }, [page, search, category, resourceType, difficulty]);
+  }, [page, debouncedSearch, category, resourceType, difficulty]);
 
   useEffect(() => {
     load();
@@ -88,13 +97,18 @@ export default function LibraryPage() {
             <BookOpen className="h-8 w-8 text-cyber-primary" />
             Learning <span className="glow-text text-cyber-primary">Library</span>
           </h1>
-          <p className="mt-2 max-w-3xl text-sm text-cyber-muted">
-            Courses, labs, articles, and tools from the best free security education providers —
-            all in one place. Every resource is free to start and safe to use.
-          </p>
-        </div>
+<p className="mt-2 max-w-3xl text-sm text-cyber-muted">
+          Courses, labs, articles, and tools from the best free security education providers —
+          all in one place. Every resource is free to start and safe to use.
+        </p>
+      </div>
 
-        <div className="mb-6 flex flex-wrap items-center gap-3">
+      <div className="mb-6 flex items-center gap-2 text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-3 py-2">
+        <ShieldAlert className="h-4 w-4 flex-shrink-0" />
+        <span>All resources are for educational purposes only — not for attacking systems. Learn to secure, not exploit.</span>
+      </div>
+
+      <div className="mb-6 flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[220px]">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyber-muted" />
             <input

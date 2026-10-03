@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Users, ShieldAlert, Activity, Flag, Ban, CheckCircle2 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { TerminalCard, StatCard, LoadingScreen } from '@/components/TerminalCard';
-import { useAuth } from '@/lib/auth';
+import { useRequireAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
 import type { UserRole } from '@/lib/types';
 
@@ -39,7 +39,7 @@ interface AdminUsersData {
 }
 
 export default function AdminPage() {
-  const { user, loading } = useAuth();
+  const { user, loading } = useRequireAuth();
   const router = useRouter();
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);

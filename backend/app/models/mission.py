@@ -1,24 +1,25 @@
 import enum
-from datetime import datetime, timezone
-from typing import Optional, List, Dict
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import (
-    String,
-    Text,
-    Integer,
-    DateTime,
     Boolean,
-    Enum as SQLEnum,
+    DateTime,
     ForeignKey,
     Index,
+    Integer,
+    String,
+    Text,
     UniqueConstraint,
-    CheckConstraint,
 )
-from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB, ARRAY
+from sqlalchemy import (
+    Enum as SQLEnum,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.database import Base
+from app.core.database import Base, FlexibleArray
 from app.models.course import DifficultyLevel
 
 
@@ -63,7 +64,7 @@ class Mission(Base):
     )
 
     id: Mapped[PGUUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
 
     mission_type: Mapped[MissionType] = mapped_column(
         SQLEnum(MissionType, native_enum=False),
@@ -74,12 +75,12 @@ class Mission(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     short_description: Mapped[str] = mapped_column(String(500), nullable=False)
-    background_story: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    background_story: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    icon: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    color: Mapped[Optional[str]] = mapped_column(String(7), nullable=True)
-    thumbnail_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    banner_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    icon: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    color: Mapped[str | None] = mapped_column(String(7), nullable=True)
+    thumbnail_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    banner_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     difficulty: Mapped[DifficultyLevel] = mapped_column(
         SQLEnum(DifficultyLevel, native_enum=False),
@@ -88,9 +89,9 @@ class Mission(Base):
     )
     estimated_minutes: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
 
-    prerequisites: Mapped[List[str]] = mapped_column(ARRAY(String), default=list, nullable=False)
-    learning_objectives: Mapped[List[str]] = mapped_column(ARRAY(String), default=list, nullable=False)
-    tags: Mapped[List[str]] = mapped_column(ARRAY(String), default=list, nullable=False)
+    prerequisites: Mapped[list[str]] = mapped_column(FlexibleArray(str), default=list, nullable=False)
+    learning_objectives: Mapped[list[str]] = mapped_column(FlexibleArray(str), default=list, nullable=False)
+    tags: Mapped[list[str]] = mapped_column(FlexibleArray(str), default=list, nullable=False)
 
     status: Mapped[MissionStatus] = mapped_column(
         SQLEnum(MissionStatus, native_enum=False),
@@ -99,7 +100,7 @@ class Mission(Base):
     )
     is_premium: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_repeatable: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    max_attempts: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    max_attempts: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     xp_reward: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
     coins_reward: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
@@ -107,29 +108,29 @@ class Mission(Base):
     bonus_coins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     unlock_requirements: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    meta_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
-    published_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
-    objectives: Mapped[List["MissionObjective"]] = relationship(
+    objectives: Mapped[list["MissionObjective"]] = relationship(
         "MissionObjective", back_populates="mission", cascade="all, delete-orphan", order_by="MissionObjective.order"
     )
-    progress: Mapped[List["MissionProgress"]] = relationship(
+    progress: Mapped[list["MissionProgress"]] = relationship(
         "MissionProgress", back_populates="mission", cascade="all, delete-orphan"
     )
-    rewards: Mapped[List["MissionReward"]] = relationship(
+    rewards: Mapped[list["MissionReward"]] = relationship(
         "MissionReward", back_populates="mission", cascade="all, delete-orphan"
     )
 
@@ -156,7 +157,7 @@ class MissionObjective(Base):
 
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    hint: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    hint: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     content: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     validation: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
@@ -169,22 +170,22 @@ class MissionObjective(Base):
     is_hidden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     unlock_requirements: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
 
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    meta_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
 
     mission: Mapped["Mission"] = relationship("Mission", back_populates="objectives")
-    progress: Mapped[List["ObjectiveProgress"]] = relationship(
+    progress: Mapped[list["ObjectiveProgress"]] = relationship(
         "ObjectiveProgress", back_populates="objective", cascade="all, delete-orphan"
     )
 
@@ -220,28 +221,28 @@ class MissionProgress(Base):
 
     time_spent_seconds: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    best_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    best_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     session_data: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    meta_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
 
     mission: Mapped["Mission"] = relationship("Mission", back_populates="progress")
-    objective_progress: Mapped[List["ObjectiveProgress"]] = relationship(
+    objective_progress: Mapped[list["ObjectiveProgress"]] = relationship(
         "ObjectiveProgress", back_populates="mission_progress", cascade="all, delete-orphan"
     )
 
@@ -278,20 +279,20 @@ class ObjectiveProgress(Base):
     submitted_data: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     validation_result: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
 
-    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    meta_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
 
@@ -313,20 +314,20 @@ class MissionReward(Base):
     )
 
     reward_type: Mapped[str] = mapped_column(String(50), nullable=False)  # item, badge, title, certificate, xp, coins
-    reward_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    reward_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    icon: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    icon: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     quantity: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     probability: Mapped[float] = mapped_column(default=1.0, nullable=False)  # For random rewards
 
     conditions: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    meta_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
 

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict, Generic, List, Optional, TypeVar
+from typing import Any, Generic, TypeVar
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -26,7 +26,7 @@ class TimestampMixin(BaseSchema):
 
 
 class SoftDeleteMixin(BaseSchema):
-    deleted_at: Optional[datetime] = None
+    deleted_at: datetime | None = None
     is_deleted: bool = False
 
 
@@ -36,16 +36,16 @@ class PaginationParams(BaseSchema):
 
 
 class SortParams(BaseSchema):
-    sort_by: Optional[str] = None
+    sort_by: str | None = None
     sort_order: str = Field(default="asc", pattern="^(asc|desc)$")
 
 
 class FilterParams(BaseSchema):
-    search: Optional[str] = None
+    search: str | None = None
 
 
 class PaginatedResponse(BaseModel, Generic[T]):
-    items: List[T]
+    items: list[T]
     total: int
     page: int
     page_size: int
@@ -56,7 +56,7 @@ class PaginatedResponse(BaseModel, Generic[T]):
     @classmethod
     def create(
         cls,
-        items: List[T],
+        items: list[T],
         total: int,
         page: int,
         page_size: int,
@@ -75,17 +75,17 @@ class PaginatedResponse(BaseModel, Generic[T]):
 
 class APIResponse(BaseModel, Generic[T]):
     success: bool = True
-    data: Optional[T] = None
-    error: Optional[str] = None
-    details: Optional[Dict[str, Any]] = None
-    meta: Optional[Dict[str, Any]] = None
+    data: T | None = None
+    error: str | None = None
+    details: dict[str, Any] | None = None
+    meta: dict[str, Any] | None = None
 
 
 class ErrorResponse(BaseModel):
     success: bool = False
     error: str
-    details: Optional[Dict[str, Any]] = None
-    code: Optional[str] = None
+    details: dict[str, Any] | None = None
+    code: str | None = None
 
 
 class MessageResponse(BaseModel):

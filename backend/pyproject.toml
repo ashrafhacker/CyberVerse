@@ -30,7 +30,7 @@ dependencies = [
     "pyotp>=2.9.0",
     "qrcode>=7.4.2",
     "supabase>=2.3.4",
-    "stripe>=7.8.0",
+    "razorpay>=1.4.1",
     "sendgrid>=6.11.0",
 ]
 
@@ -63,8 +63,10 @@ addopts = "-v --tb=short"
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "PT", "SIM", "TID", "PYI", "ARG", "PTH", "ERA", "PL", "TRY", "NPY", "RSE", "RET", "FLY", "A", "C", "D", "DTZ", "EXE", "ISC", "ICN", "PIE", "TCH", "Q", "TD", "FUR", "LOG", "SLF", "SLOT", "BLE", "INP", "RUF", "T10", "EM", "PGH", "PY2", "ASYNC"]
-ignore = ["E501", "D212", "D401"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "PT", "SIM", "TID", "PYI", "ARG", "PTH", "ERA", "PL", "TRY", "NPY", "RSE", "RET", "FLY", "A", "C", "D", "DTZ", "EXE", "ISC", "ICN", "PIE", "TCH", "Q", "TD", "LOG", "SLF", "SLOT", "BLE", "INP", "RUF", "T10", "EM", "PGH", "ASYNC"]
+ignore = ["E501", "D212", "D401", "B008"]
 
 [tool.ruff.format]
 quote-style = "double"

@@ -1,21 +1,22 @@
 import enum
-from datetime import datetime, timezone
-from typing import List, Optional
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import (
     Boolean,
     DateTime,
-    Enum as SQLEnum,
     Index,
     Integer,
     String,
     Text,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, UUID as PGUUID
+from sqlalchemy import (
+    Enum as SQLEnum,
+)
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.core.database import Base
+from app.core.database import Base, FlexibleArray
 from app.models.course import DifficultyLevel
 
 
@@ -51,22 +52,22 @@ class LibraryResource(Base):
         default=DifficultyLevel.BEGINNER,
         nullable=False,
     )
-    provider: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    file_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    duration_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    tags: Mapped[List[str]] = mapped_column(ARRAY(String), default=list, nullable=False)
+    provider: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    file_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tags: Mapped[list[str]] = mapped_column(FlexibleArray(str), default=list, nullable=False)
     is_free: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_published: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     view_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )

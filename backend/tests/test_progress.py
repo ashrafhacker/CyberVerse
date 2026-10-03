@@ -9,6 +9,7 @@ async def _register(client, email, username, name="Test Agent"):
         json={
             "email": email,
             "password": "StrongPass123!",
+            "confirm_password": "StrongPass123!",
             "full_name": name,
             "username": username,
         },
@@ -70,7 +71,7 @@ async def test_xp_award_updates_level_data(client):
     response = await client.post("/api/v1/progress/xp?xp=250&coins=50", headers=headers)
     assert response.status_code == 200
     data = response.json()["data"]
-    assert data["xp_earned"] == 250
+    assert data["xp_awarded"] == 250
     assert data["level"] >= 1
 
     overview = await client.get("/api/v1/progress/overview", headers=headers)
@@ -79,7 +80,7 @@ async def test_xp_award_updates_level_data(client):
 
 async def test_leaderboard_available(client):
     headers = await _auth_headers(client, "p6@test.io", "p6_test")
-    response = await client.get("/api/v1/leaderboard?type=all_time", headers=headers)
+    response = await client.get("/api/v1/leaderboard/?type=all_time", headers=headers)
     assert response.status_code == 200
     assert "entries" in response.json()["data"]
 
@@ -87,7 +88,7 @@ async def test_leaderboard_available(client):
 async def test_missions_list_and_start(client):
     headers = await _auth_headers(client, "p7@test.io", "p7_test")
 
-    listing = await client.get("/api/v1/missions", headers=headers)
+    listing = await client.get("/api/v1/missions/", headers=headers)
     assert listing.status_code == 200
 
     missions = listing.json()["data"]["items"]

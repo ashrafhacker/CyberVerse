@@ -1,13 +1,13 @@
+from datetime import UTC
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import CurrentUser, require_moderator, require_admin
+from app.api.deps import CurrentUser, require_admin, require_moderator
 from app.core.database import get_db
-from app.models.user import Profile, User, UserStatus
-from app.schemas.auth import UserResponse
+from app.models.user import User, UserStatus
 from app.schemas.base import APIResponse, MessageResponse, PaginatedResponse
 
 router = APIRouter()
@@ -30,7 +30,7 @@ def _serialize_user(user: User) -> dict:
 
 @router.get("/", response_model=APIResponse[PaginatedResponse], summary="List users (moderator+)")
 async def list_users(
-    _: CurrentUser = Depends(require_moderator),
+    _: User = Depends(require_moderator),
     db: AsyncSession = Depends(get_db),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -83,7 +83,7 @@ async def get_user(
 async def update_user_status(
     user_id: UUID,
     new_status: UserStatus,
-    _: CurrentUser = Depends(require_admin),
+    _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(User).where(User.id == user_id))
@@ -100,7 +100,7 @@ async def update_user_status(
 async def update_user_role(
     user_id: UUID,
     new_role: str,
-    _: CurrentUser = Depends(require_admin),
+    _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     from app.models.user import UserRole
@@ -123,7 +123,7 @@ async def update_user_role(
 @router.delete("/{user_id}", response_model=MessageResponse, summary="Soft-delete user (admin)")
 async def delete_user(
     user_id: UUID,
-    _: CurrentUser = Depends(require_admin),
+    _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(User).where(User.id == user_id))
@@ -131,7 +131,7 @@ async def delete_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     user.status = UserStatus.INACTIVE
-    from datetime import datetime, timezone
-    user.deleted_at = datetime.now(timezone.utc)
+    from datetime import datetime
+    user.deleted_at = datetime.now(UTC)
     await db.commit()
     return MessageResponse(message="User deactivated")

@@ -1,0 +1,8 @@
+{
+  "name": "cyberverse",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npx concurrently -n \"BACKEND,FRONTEND\" -c \"blue,green\" \"cd backend && .venv/bin/python -m uvicorn app.main:app --reload --port 8000\" \"cd frontend && npm run dev\""
+  }
+}

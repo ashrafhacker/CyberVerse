@@ -1,0 +1,9 @@
+ea4bc82a6ad023ab7ee23ee620429895
+::res://::1791013379
+::res://environments/::1791013280
+::res://scenes/::1791013373
+soc.tscn::PackedScene::3926263552::1791013373::0::1::::<><>::res://scripts/soc.gd<>res://scripts/player.gd<>res://scripts/terminal.gd
+::res://scripts/::1791013322
+player.gd::GDScript::-1::1791013308::0::1::::<>CharacterBody3D<>::
+soc.gd::GDScript::-1::1791013322::0::1::::<>Node3D<>::
+terminal.gd::GDScript::-1::1791013315::0::1::::<>StaticBody3D<>::

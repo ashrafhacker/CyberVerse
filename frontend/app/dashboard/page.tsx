@@ -3,14 +3,14 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Zap, Flame, Target, BookOpen } from 'lucide-react';
-import { useAuth } from '@/lib/auth';
+import { useRequireAuth } from '@/lib/auth';
 import Navbar from '@/components/Navbar';
 import { TerminalCard, StatCard, XPBar, LoadingScreen } from '@/components/TerminalCard';
 import { api } from '@/lib/api';
 import type { Course, DailyChallenge, PlayerProgress, Profile } from '@/lib/types';
 
 export default function DashboardPage() {
-  const { user, loading } = useAuth();
+  const { user, loading } = useRequireAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [progress, setProgress] = useState<PlayerProgress | null>(null);
   const [daily, setDaily] = useState<DailyChallenge[]>([]);
@@ -22,13 +22,13 @@ export default function DashboardPage() {
     Promise.all([
       api.get<{ data: Profile }>('/profile/'),
       api.get<{ data: PlayerProgress }>('/progress/overview'),
-      api.get<DailyChallenge[]>('/missions/daily'),
+      api.get<{ data: DailyChallenge[] }>('/missions/daily'),
       api.get<{ data: { items: Course[] } }>('/courses?page_size=3'),
     ])
       .then(([p, pr, d, c]) => {
         setProfile(p.data);
         setProgress(pr.data);
-        setDaily(d);
+        setDaily(d.data || []);
         setCourses(c.data.items);
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load dashboard'));
@@ -59,7 +59,12 @@ export default function DashboardPage() {
               rank: {profile?.rank ?? 'recruit'} · access: {user.role}
             </p>
           </div>
-          <Link href="/missions" className="terminal-button">New Mission</Link>
+          <div className="flex items-center gap-3">
+            <Link href="/dashboard-v2" className="terminal-button-ghost">
+              Command Center
+            </Link>
+            <Link href="/missions" className="terminal-button">New Mission</Link>
+          </div>
         </div>
 
         <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -75,12 +80,12 @@ export default function DashboardPage() {
 
             <TerminalCard title="daily_missions.sh">
               <h3 className="mb-3 font-semibold">Daily challenges</h3>
-              {daily.length === 0 ? (
+              {(!Array.isArray(daily) || daily.length === 0) ? (
                 <p className="text-sm text-cyber-muted">No challenges today. Check back after the daily rotation.</p>
               ) : (
                 <ul className="space-y-2">
-                  {daily.map((c) => (
-                    <li key={c.id} className="flex items-center justify-between rounded-md border border-cyber-border px-3 py-2 text-sm">
+                  {Array.isArray(daily) && daily.map((c, i) => (
+                    <li key={c?.id ?? i} className="flex items-center justify-between rounded-md border border-cyber-border px-3 py-2 text-sm">
                       <div>
                         <span>{c.title}</span>
                         <p className="text-xs text-cyber-muted">{c.description}</p>

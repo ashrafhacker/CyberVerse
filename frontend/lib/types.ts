@@ -165,6 +165,9 @@ export interface PlayerProgress {
   learning_streak: number;
   longest_streak: number;
   time_spent_seconds: number;
+  statistics?: Record<string, unknown>;
+  current_mission_id?: string | null;
+  current_course_id?: string | null;
 }
 
 export interface LabFacility {
@@ -197,6 +200,8 @@ export interface LabSession {
   mode: string;
   mentor_level: string;
   current_facility_slug: string;
+  mission_slug?: string | null;
+  difficulty?: string;
   score?: number | null;
   xp_awarded: number;
   coins_awarded: number;
@@ -213,8 +218,47 @@ export interface LabWorld {
   assets: Array<Record<string, unknown>>;
   identities: Array<Record<string, unknown>>;
   alerts: Array<Record<string, unknown>>;
+  logs?: Array<Record<string, unknown>>;
   evidence: Array<Record<string, unknown>>;
   objectives: Array<Record<string, unknown>>;
   tool_manifest: Array<Record<string, unknown>>;
   safety_metadata: Record<string, unknown>;
+}
+
+export interface LabKillChainPhase {
+  phase: string;
+  label: string;
+  summary: string;
+  event_count: number;
+  alert_count: number;
+  critical: boolean;
+  evidence: Array<Record<string, unknown>>;
+  events: Array<Record<string, unknown>>;
+}
+
+export interface LabTimelineEvent {
+  id: string;
+  timestamp?: string | null;
+  kind: string;
+  title: string;
+  severity: string;
+  phase: string;
+  item_type?: string;
+  key?: string;
+}
+
+export interface LabAnalysis {
+  generated_with: string;
+  analyst: string;
+  company?: string | null;
+  facility?: string | null;
+  overview: string;
+  confidence: number;
+  coverage: { collected: number; total: number; percent: number };
+  predominant_phase: string;
+  kill_chain: LabKillChainPhase[];
+  timeline: LabTimelineEvent[];
+  recommendations: string[];
+  entities?: Record<string, unknown>;
+  safety_metadata?: Record<string, unknown>;
 }

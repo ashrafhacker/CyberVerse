@@ -1,44 +1,47 @@
 """Shared fixtures for CyberVerse backend tests.
 
-Tests require a PostgreSQL database (models use JSONB/PGUUID/ARRAY).
-- CI: the Postgres service container is provisioned by the workflow.
-- Local: run `docker compose -f docker/docker-compose.dev.yml up -d postgres`
-  then `$env:DATABASE_URL="postgresql://cyberverse:cyberverse@localhost:5432/cyberverse"`.
-
-The test suite creates and drops all tables on the configured database at
-session start/end. Never point DATABASE_URL at a production database.
+Uses SQLite for fast local testing (no Docker required).
 """
 
 import os
+import tempfile
 
 # Required settings must exist BEFORE app modules are imported
 os.environ.setdefault("SECRET_KEY", "test-secret-key-0123456789abcdef0123456789abcdef")
 os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-0123456789abcdef0123456789abc")
-os.environ.setdefault(
-    "DATABASE_URL",
-    "postgresql://cyberverse:cyberverse@localhost:5432/cyberverse_test",
-)
 os.environ.setdefault("ENVIRONMENT", "testing")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/15")
 
+# Clear settings cache to pick up test env vars
+from app.core.config import get_settings
+get_settings.cache_clear()
+
 import pytest_asyncio  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker  # noqa: E402
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine  # noqa: E402
 
-from app.core.database import Base, create_engine, get_db  # noqa: E402
+from app.core.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
 
 
-@pytest_asyncio.fixture(scope="session")
+def _make_engine():
+    temp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    temp_db.close()
+    return create_async_engine(f"sqlite+aiosqlite:///{temp_db.name}", poolclass=None)
+
+
+@pytest_asyncio.fixture(scope="function")
 async def db_engine():
-    engine = create_engine()
+    engine = _make_engine()
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     yield engine
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
     await engine.dispose()
+    import os
+    try:
+        os.unlink(str(engine.url).replace("sqlite+aiosqlite:///", ""))
+    except OSError:
+        pass
 
 
 @pytest_asyncio.fixture

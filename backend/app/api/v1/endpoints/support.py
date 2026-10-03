@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import CurrentUser
 from app.core.database import get_db
 from app.models.support import FAQItem, SupportTicket, TicketMessage
-from app.schemas.base import APIResponse, MessageResponse, PaginatedResponse
+from app.schemas.base import APIResponse, PaginatedResponse
 
 router = APIRouter()
 

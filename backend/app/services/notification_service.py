@@ -1,4 +1,3 @@
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -16,9 +15,9 @@ class NotificationService:
         body: str,
         notification_type: NotificationType = NotificationType.SYSTEM,
         channel: NotificationChannel = NotificationChannel.IN_APP,
-        link: Optional[str] = None,
-        icon: Optional[str] = None,
-        data: Optional[dict] = None,
+        link: str | None = None,
+        icon: str | None = None,
+        data: dict | None = None,
         commit: bool = True,
     ) -> Notification:
         notification = Notification(
@@ -44,8 +43,8 @@ class NotificationService:
         title: str,
         body: str,
         notification_type: NotificationType = NotificationType.SYSTEM,
-        link: Optional[str] = None,
-        data: Optional[dict] = None,
+        link: str | None = None,
+        data: dict | None = None,
     ) -> int:
         for user_id in user_ids:
             db.add(

@@ -19,7 +19,7 @@ tenacity>=8.2.3
 email-validator>=2.1.0
 pyotp>=2.9.0
 qrcode[pil]>=7.4.2
-stripe>=7.8.0
+razorpay>=1.4.1
 sendgrid>=6.11.0
 greenlet>=3.0.0
 

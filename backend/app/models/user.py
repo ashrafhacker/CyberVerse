@@ -1,23 +1,46 @@
 import enum
-from datetime import datetime, timezone
-from typing import Optional, List
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Optional
 from uuid import uuid4
 
 from sqlalchemy import (
-    String,
-    Text,
-    DateTime,
     Boolean,
-    Enum as SQLEnum,
+    DateTime,
     ForeignKey,
     Index,
-    UniqueConstraint,
-    func,
+    String,
+    Text,
 )
-from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB
+from sqlalchemy import (
+    Enum as SQLEnum,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+if TYPE_CHECKING:
+    from app.models.achievement import UserAchievement
+    from app.models.analytics import LeaderboardEntry
+    from app.models.certificate import Certificate
+    from app.models.device import Device
+    from app.models.game import (
+        GameChallenge,
+        ChallengeAttempt,
+        ChallengeSubmission,
+        GameTeam,
+        GameTeamMember,
+        Tournament,
+        TournamentRegistration,
+    )
+    from app.models.inventory import InventoryItem
+    from app.models.notification import Notification
+    from app.models.premium import Subscription
+    from app.models.progress import PlayerProgress
+    from app.models.session import AuditLog, Session
+    from app.models.social import Friend
+    from app.models.support import SupportTicket
 
 
 class UserRole(str, enum.Enum):
@@ -54,10 +77,10 @@ class User(Base):
     )
 
     id: Mapped[PGUUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
-    password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     full_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    avatar_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     role: Mapped[UserRole] = mapped_column(
         SQLEnum(UserRole, native_enum=False),
@@ -72,84 +95,106 @@ class User(Base):
 
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_2fa_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    totp_secret: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
-    backup_codes: Mapped[List[str]] = mapped_column(JSONB, default=list, nullable=False)
+    totp_secret: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    backup_codes: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
 
     provider: Mapped[AuthProvider] = mapped_column(
         SQLEnum(AuthProvider, native_enum=False),
         default=AuthProvider.EMAIL,
         nullable=False,
     )
-    provider_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    provider_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
-    last_login: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_login_ip: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
+    last_login: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_login_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
     failed_login_attempts: Mapped[int] = mapped_column(default=0, nullable=False)
-    locked_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    email_verification_token: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    email_verification_expires: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    password_reset_token: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    password_reset_expires: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    email_verification_token: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    email_verification_expires: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    password_reset_token: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    password_reset_expires: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     preferences: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    meta_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
-    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     profile: Mapped[Optional["Profile"]] = relationship(
         "Profile", back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
-    sessions: Mapped[List["Session"]] = relationship(
+    sessions: Mapped[list["Session"]] = relationship(
         "Session", back_populates="user", cascade="all, delete-orphan"
     )
-    devices: Mapped[List["Device"]] = relationship(
+    devices: Mapped[list["Device"]] = relationship(
         "Device", back_populates="user", cascade="all, delete-orphan"
     )
-    progress: Mapped[List["PlayerProgress"]] = relationship(
+    progress: Mapped[list["PlayerProgress"]] = relationship(
         "PlayerProgress", back_populates="user", cascade="all, delete-orphan"
     )
-    achievements: Mapped[List["UserAchievement"]] = relationship(
+    achievements: Mapped[list["UserAchievement"]] = relationship(
         "UserAchievement", back_populates="user", cascade="all, delete-orphan"
     )
-    certificates: Mapped[List["Certificate"]] = relationship(
+    certificates: Mapped[list["Certificate"]] = relationship(
         "Certificate", back_populates="user", cascade="all, delete-orphan"
     )
-    notifications: Mapped[List["Notification"]] = relationship(
+    notifications: Mapped[list["Notification"]] = relationship(
         "Notification", back_populates="user", cascade="all, delete-orphan"
     )
-    subscriptions: Mapped[List["Subscription"]] = relationship(
+    subscriptions: Mapped[list["Subscription"]] = relationship(
         "Subscription", back_populates="user", cascade="all, delete-orphan"
     )
-    support_tickets: Mapped[List["SupportTicket"]] = relationship(
-        "SupportTicket", back_populates="user", cascade="all, delete-orphan"
+    support_tickets: Mapped[list["SupportTicket"]] = relationship(
+        "SupportTicket", back_populates="user", foreign_keys="SupportTicket.user_id", cascade="all, delete-orphan"
     )
-    inventory: Mapped[List["InventoryItem"]] = relationship(
+    inventory: Mapped[list["InventoryItem"]] = relationship(
         "InventoryItem", back_populates="user", cascade="all, delete-orphan"
     )
-    friends_sent: Mapped[List["Friend"]] = relationship(
+    friends_sent: Mapped[list["Friend"]] = relationship(
         "Friend", back_populates="user", foreign_keys="Friend.user_id", cascade="all, delete-orphan"
     )
-    friends_received: Mapped[List["Friend"]] = relationship(
+    friends_received: Mapped[list["Friend"]] = relationship(
         "Friend", back_populates="friend_user", foreign_keys="Friend.friend_id"
     )
-    leaderboard_entries: Mapped[List["LeaderboardEntry"]] = relationship(
+    leaderboard_entries: Mapped[list["LeaderboardEntry"]] = relationship(
         "LeaderboardEntry", back_populates="user", cascade="all, delete-orphan"
     )
-    audit_logs: Mapped[List["AuditLog"]] = relationship(
+    audit_logs: Mapped[list["AuditLog"]] = relationship(
         "AuditLog", back_populates="user", cascade="all, delete-orphan"
+    )
+    # Game relationships
+    challenges: Mapped[list["GameChallenge"]] = relationship(
+        "GameChallenge", back_populates="author", cascade="all, delete-orphan"
+    )
+    challenge_attempts: Mapped[list["ChallengeAttempt"]] = relationship(
+        "ChallengeAttempt", back_populates="user", cascade="all, delete-orphan"
+    )
+    challenge_submissions: Mapped[list["ChallengeSubmission"]] = relationship(
+        "ChallengeSubmission", back_populates="user", cascade="all, delete-orphan"
+    )
+    game_team_memberships: Mapped[list["GameTeamMember"]] = relationship(
+        "GameTeamMember", back_populates="user", cascade="all, delete-orphan"
+    )
+    captained_teams: Mapped[list["GameTeam"]] = relationship(
+        "GameTeam", foreign_keys="GameTeam.captain_id", back_populates="captain", cascade="all, delete-orphan"
+    )
+    tournament_registrations: Mapped[list["TournamentRegistration"]] = relationship(
+        "TournamentRegistration", back_populates="user", cascade="all, delete-orphan"
+    )
+    created_tournaments: Mapped[list["Tournament"]] = relationship(
+        "Tournament", foreign_keys="Tournament.created_by", back_populates="creator", cascade="all, delete-orphan"
     )
 
 
@@ -167,32 +212,32 @@ class Profile(Base):
         nullable=False,
     )
 
-    username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
-    bio: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    banner_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    bio: Mapped[str | None] = mapped_column(Text, nullable=True)
+    banner_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     xp: Mapped[int] = mapped_column(default=0, nullable=False)
     coins: Mapped[int] = mapped_column(default=0, nullable=False)
     level: Mapped[int] = mapped_column(default=1, nullable=False)
-    rank: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    rank: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
-    titles: Mapped[List[str]] = mapped_column(JSONB, default=list, nullable=False)
-    badges: Mapped[List[str]] = mapped_column(JSONB, default=list, nullable=False)
-    equipped_title: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    equipped_badge: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    titles: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
+    badges: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
+    equipped_title: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    equipped_badge: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     statistics: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     settings: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
 

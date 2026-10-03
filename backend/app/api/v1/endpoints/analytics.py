@@ -1,29 +1,28 @@
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import CurrentUser, require_admin
+from app.api.deps import require_admin
 from app.core.database import get_db
 from app.models.analytics import AnalyticsEvent
-from app.models.user import User, UserRole
 from app.models.progress import PlayerProgress
+from app.models.user import User, UserRole
 from app.schemas.base import APIResponse
 
 router = APIRouter()
 
 
 def _date_range(days: int) -> tuple[datetime, datetime]:
-    end = datetime.now(timezone.utc)
+    end = datetime.now(UTC)
     start = end - timedelta(days=days)
     return start, end
 
 
 @router.get("/overview", response_model=APIResponse[dict], summary="Platform analytics overview (admin)")
 async def analytics_overview(
-    _: CurrentUser = Depends(require_admin),
+    _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
     days: int = Query(30, ge=1, le=365),
 ):
@@ -66,7 +65,7 @@ async def analytics_overview(
 
 @router.get("/dau", response_model=APIResponse[list], summary="Daily active users (admin)")
 async def daily_active_users(
-    _: CurrentUser = Depends(require_admin),
+    _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
     days: int = Query(30, ge=1, le=365),
 ):
@@ -84,7 +83,7 @@ async def daily_active_users(
 
 @router.get("/events", response_model=APIResponse[dict], summary="Event analytics (admin)")
 async def event_analytics(
-    _: CurrentUser = Depends(require_admin),
+    _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
     days: int = Query(30, ge=1, le=365),
 ):
@@ -108,7 +107,7 @@ async def event_analytics(
 
 @router.get("/progression", response_model=APIResponse[dict], summary="XP distribution analytics (admin)")
 async def xp_distribution(
-    _: CurrentUser = Depends(require_admin),
+    _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -138,7 +137,7 @@ async def xp_distribution(
 
 @router.get("/revenue", response_model=APIResponse[dict], summary="Revenue summary (admin)")
 async def revenue_summary(
-    _: CurrentUser = Depends(require_admin),
+    _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     from app.models.premium import Payment

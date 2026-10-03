@@ -117,16 +117,15 @@ export function generateNetwork(level: number, rng: () => number = Math.random):
       .slice(0, i)
       .filter((n) => layerIndex[n.kind] < layerIndex[node.kind]);
     const source = prev.length > 0 ? pick(prev, rng) : nodes[0];
-    if (source.id !== node.id) {
+    if (source.id !== node.id && !links.some((l) => l.from === source.id && l.to === node.id)) {
       links.push({ from: source.id, to: node.id });
     }
   }
-  if (!links.some((l) => nodes.find((n) => n.id === l.from)?.kind === 'core') && nodes.length >= 3) {
-    const firstCore = nodes.find((n) => n.kind === 'core');
-    const internal = nodes.filter((n) => n.kind === 'internal');
-    if (firstCore && internal.length > 0) {
-      links.push({ from: pick(internal, rng).id, to: firstCore.id });
-    }
+  const firstCore = nodes.find((n) => n.kind === 'core');
+  const internal = nodes.filter((n) => n.kind === 'internal');
+  if (firstCore && internal.length > 0 && !links.some((l) => l.to === firstCore.id)) {
+    const source = pick(internal, rng);
+    links.push({ from: source.id, to: firstCore.id });
   }
 
   return {

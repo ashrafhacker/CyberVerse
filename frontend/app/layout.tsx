@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import { AuthProvider } from '@/lib/auth';
-import AIMentorWidget from '@/components/AIMentorWidget';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -38,11 +37,16 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="dark" suppressHydrationWarning>
+      <head>
+        <link rel="preconnect" href="https://api.cesium.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://assets.cesium.com" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://api.cesium.com" />
+        <link rel="dns-prefetch" href="https://assets.cesium.com" />
+      </head>
       <body suppressHydrationWarning>
         <AuthProvider>
           {children}
-          <AIMentorWidget />
         </AuthProvider>
       </body>
     </html>

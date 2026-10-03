@@ -1,3 +1,4 @@
+from datetime import UTC
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -59,14 +60,17 @@ async def get_daily_challenges(
     user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
-    from datetime import datetime, timezone
+    from datetime import datetime, timedelta
 
     from app.models.achievement import DailyChallenge
 
-    today = datetime.now(timezone.utc).date()
+    now = datetime.now(UTC)
+    start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_of_day = start_of_day + timedelta(days=1)
     result = await db.execute(
         select(DailyChallenge).where(
-            DailyChallenge.challenge_date >= today.strftime("%Y-%m-%d"),
+            DailyChallenge.challenge_date >= start_of_day,
+            DailyChallenge.challenge_date < end_of_day,
             DailyChallenge.is_active.is_(True),
         )
     )
@@ -92,11 +96,11 @@ async def get_weekly_challenges(
     user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from app.models.achievement import WeeklyChallenge
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     result = await db.execute(
         select(WeeklyChallenge).where(
             WeeklyChallenge.start_date <= now,
@@ -188,13 +192,13 @@ async def start_mission(
     progress = progress_result.scalar_one_or_none()
 
     if not progress:
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         progress = MissionProgress(
             user_id=user.id,
             mission_id=mission_id,
             status="in_progress",
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
         )
         db.add(progress)
         await db.commit()
@@ -220,7 +224,7 @@ async def submit_objective(
     user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     objective_result = await db.execute(
         select(MissionObjective).where(
@@ -264,12 +268,12 @@ async def submit_objective(
                 mission_progress_id=progress.id,
                 objective_id=objective.id,
                 status="completed",
-                completed_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(UTC),
             )
             db.add(op)
         elif op.status != "completed":
             op.status = "completed"
-            op.completed_at = datetime.now(timezone.utc)
+            op.completed_at = datetime.now(UTC)
         else:
             return APIResponse[dict](data={"passed": True, "already_completed": True})
 
@@ -293,10 +297,10 @@ async def submit_objective(
 
         mission_completed = len(completed_count) >= len(total_objectives)
         if mission_completed and progress.status != "completed":
-            from datetime import datetime, timezone
+            from datetime import datetime
 
             progress.status = "completed"
-            progress.completed_at = datetime.now(timezone.utc)
+            progress.completed_at = datetime.now(UTC)
             mission = (
                 await db.execute(select(Mission).where(Mission.id == mission_id))
             ).scalar_one_or_none()
@@ -317,11 +321,10 @@ async def submit_objective(
                 "coins_earned": objective.coins_reward,
             }
         )
-    else:
-        await db.commit()
-        return APIResponse[dict](
-            data={"passed": False, "objective_completed": False, "mission_completed": False}
-        )
+    await db.commit()
+    return APIResponse[dict](
+        data={"passed": False, "objective_completed": False, "mission_completed": False}
+    )
 
 
 @router.get("/{mission_id}/progress", response_model=APIResponse[dict], summary="Get mission progress")

@@ -1,3 +1,4 @@
+from datetime import UTC
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser
 from app.core.database import get_db
-from app.models.progress import LessonProgress, PlayerProgress
-from app.schemas.base import APIResponse, MessageResponse
+from app.models.progress import LessonProgress
+from app.schemas.base import APIResponse
 from app.services.progress_service import ProgressService
 
 router = APIRouter()
@@ -18,6 +19,15 @@ class UpdateLessonProgressRequest(BaseModel):
     status: str = Field(..., pattern="^(not_started|in_progress|completed)$")
     progress_percentage: int | None = Field(None, ge=0, le=100)
     time_spent_seconds: int = Field(0, ge=0)
+    # Playback telemetry used to verify completion of video lessons:
+    position_seconds: float | None = Field(None, ge=0)
+    watched_seconds: float | None = Field(None, ge=0)
+
+
+# A lesson may only be marked completed once the learner has actually
+# consumed at least this percentage of its content (video watch-through
+# ratio tracked by the player, or an explicit action for PDFs).
+COMPLETION_MIN_PERCENT = 90
 
 
 @router.get("/overview", response_model=APIResponse[dict], summary="Get player progress overview")
@@ -66,6 +76,7 @@ async def list_lesson_progress(
                 "coins_earned": lp.coins_earned,
                 "attempts": lp.attempts,
                 "time_spent_seconds": lp.time_spent_seconds,
+                "last_position": lp.last_position,
                 "completed_at": lp.completed_at.isoformat() if lp.completed_at else None,
                 "updated_at": lp.updated_at.isoformat() if lp.updated_at else None,
             }
@@ -81,6 +92,30 @@ async def update_lesson_progress(
     user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
+    # ── Completion verification ────────────────────────────────────────────
+    # Never trust a bare "completed" flag: require that the learner has
+    # actually watched/read at least COMPLETION_MIN_PERCENT of the lesson.
+    # The percentage is the max of what the client reports now and what the
+    # server has already accumulated (progress only ever moves forward).
+    if request.status == "completed":
+        existing = await db.execute(
+            select(LessonProgress.progress_percentage).where(
+                LessonProgress.user_id == user.id,
+                LessonProgress.lesson_id == lesson_id,
+            )
+        )
+        stored_pct = existing.scalar_one_or_none() or 0
+        effective_pct = max(request.progress_percentage or 0, stored_pct)
+        if effective_pct < COMPLETION_MIN_PERCENT:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Completion not verified: only {effective_pct}% of this lesson "
+                    f"has been consumed — watch at least {COMPLETION_MIN_PERCENT}% "
+                    "before marking it complete."
+                ),
+            )
+
     lesson_progress = await ProgressService.update_lesson_progress(
         db,
         user_id=user.id,
@@ -88,6 +123,8 @@ async def update_lesson_progress(
         status=request.status,
         progress_percentage=request.progress_percentage,
         time_spent=request.time_spent_seconds,
+        position_seconds=request.position_seconds,
+        watched_seconds=request.watched_seconds,
     )
     return APIResponse[dict](
         data={
@@ -117,10 +154,10 @@ async def daily_checkin(
     user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     progress = await ProgressService.get_or_create_player_progress(db, user.id)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     today = now.date()
 
     last_day = progress.last_active_day
@@ -161,7 +198,6 @@ async def award_xp(
     xp: int = 0,
     coins: int = 0,
 ):
-    from fastapi import Query
 
     if xp < 0 or coins < 0 or xp > 100000 or coins > 100000:
         raise HTTPException(status_code=400, detail="Invalid reward amounts")

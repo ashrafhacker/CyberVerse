@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { GraduationCap, FileText } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { TerminalCard, LoadingScreen } from '@/components/TerminalCard';
-import { useAuth } from '@/lib/auth';
+import { useRequireAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
 import type { UserRole } from '@/lib/types';
 
@@ -19,7 +19,7 @@ interface InstructorStats {
 }
 
 export default function InstructorPage() {
-  const { user, loading } = useAuth();
+  const { user, loading } = useRequireAuth();
   const router = useRouter();
   const [stats, setStats] = useState<InstructorStats | null>(null);
   const [error, setError] = useState<string | null>(null);

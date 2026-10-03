@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import CurrentUser
 from app.core.database import get_db
 from app.models.social import ChatMessage, Team, TeamMember
-from app.schemas.base import APIResponse, MessageResponse, PaginatedResponse
+from app.schemas.base import APIResponse, MessageResponse
 
 router = APIRouter()
 
@@ -31,7 +31,7 @@ async def list_conversations(
     user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
-    from sqlalchemy import distinct, func
+    from sqlalchemy import func
 
     sent = select(ChatMessage.recipient_id).where(
         ChatMessage.sender_id == user.id,
@@ -47,19 +47,34 @@ async def list_conversations(
         )
     ).subquery()
 
-    from app.models.user import Profile, User
+    from app.models.user import User
 
-    result = await db.execute(
-        select(Profile, User)
-        .join(User, User.id == Profile.user_id)
-        .where(Profile.user_id.in_(select(peer_ids.c.recipient_id).union(select(received.c.sender_id))))
+    peer_ids_sub = (
+        select(func.distinct(peer_ids.c.recipient_id)).union(
+            select(func.distinct(received.c.sender_id))
+        )
     )
-    # Simpler approach: fetch users for peer ids
     rows = await db.execute(
-        select(User)
-        .where(User.id.in_(select(peer_ids.c.recipient_id).union(select(received.c.sender_id))))
+        select(User).where(User.id.in_(select(peer_ids_sub.c.recipient_id)))
     )
     users = rows.scalars().all()
+
+    last_messages = {}
+    if users:
+        peer_ids_list = [u.id for u in users]
+        last_result = await db.execute(
+            select(ChatMessage)
+            .where(
+                ChatMessage.sender_id.in_([user.id] + peer_ids_list),
+                ChatMessage.recipient_id.in_([user.id] + peer_ids_list),
+                ChatMessage.is_deleted.is_(False),
+            )
+            .order_by(ChatMessage.created_at.desc())
+        )
+        for m in last_result.scalars().all():
+            peer = m.sender_id if m.sender_id != user.id else m.recipient_id
+            if peer and peer not in last_messages:
+                last_messages[peer] = m.content
 
     return APIResponse[list](
         data=[
@@ -67,7 +82,7 @@ async def list_conversations(
                 "user_id": str(u.id),
                 "full_name": u.full_name,
                 "avatar_url": u.avatar_url,
-                "last_message": None,
+                "last_message": last_messages.get(u.id),
             }
             for u in users
         ]

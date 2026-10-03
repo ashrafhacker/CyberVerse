@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Trophy, Medal } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { TerminalCard, LoadingScreen } from '@/components/TerminalCard';
-import { useAuth } from '@/lib/auth';
+import { useRequireAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
 import type { LeaderboardEntry } from '@/lib/types';
 
@@ -26,7 +26,7 @@ const rankStyles: Record<number, string> = {
 };
 
 export default function LeaderboardPage() {
-  const { user, loading } = useAuth();
+  const { user, loading } = useRequireAuth();
   const [data, setData] = useState<LeaderboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
 

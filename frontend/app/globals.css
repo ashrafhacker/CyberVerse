@@ -1,7 +1,9 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
+@import url("https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@400;500;600;700&display=swap");
+@import "./originkit-section-themes.css";
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700&family=Rethink+Sans:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Tillana:wght@400;500;600;700&family=Geist:wght@400;500;600;700&family=Urbanist:wght@400;500;600;700&display=swap");
+@import "./originkit-section-theme.css";
+@import "tailwindcss";
+@config "../tailwind.config.ts";
 :root {
   color-scheme: dark;
 }
@@ -42,4 +44,48 @@ body {
   .glow-text {
     text-shadow: 0 0 20px rgba(0, 229, 255, 0.5);
   }
+
+  /* Performance: CSS animations instead of Framer Motion for landing page */
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  @keyframes slideInRight {
+    from { opacity: 0; transform: translateX(-16px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  
+  .animate-stagger-in > * {
+    animation: fadeInUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+  
+  .animate-stagger-in > *:nth-child(1) { animation-delay: 0.12s; }
+  .animate-stagger-in > *:nth-child(2) { animation-delay: 0.20s; }
+  .animate-stagger-in > *:nth-child(3) { animation-delay: 0.28s; }
+  .animate-stagger-in > *:nth-child(4) { animation-delay: 0.36s; }
+  .animate-stagger-in > *:nth-child(5) { animation-delay: 0.44s; }
+  .animate-stagger-in > *:nth-child(6) { animation-delay: 0.52s; }
+  
+  .animate-fade-in {
+    animation: fadeIn 0.4s ease-out forwards;
+  }
+  
+  .animate-slide-in-right {
+    animation: slideInRight 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+  
+  .delay-100 { animation-delay: 0.1s; }
+  .delay-200 { animation-delay: 0.2s; }
+  .delay-300 { animation-delay: 0.3s; }
+  .delay-400 { animation-delay: 0.4s; }
+  .delay-500 { animation-delay: 0.5s; }
+  .delay-600 { animation-delay: 0.6s; }
+  .delay-700 { animation-delay: 0.7s; }
+  .delay-800 { animation-delay: 0.8s; }
 }

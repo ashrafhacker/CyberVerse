@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import CurrentUser, require_roles
 from app.core.database import get_db
 from app.models.library import LibraryResource, ResourceType
-from app.models.user import UserRole
+from app.models.user import User, UserRole
 from app.schemas.base import APIResponse, PaginatedResponse
 from app.schemas.library import ResourceCreate
 
@@ -52,7 +52,7 @@ async def list_resources(
             or_(
                 LibraryResource.title.ilike(f"%{search}%"),
                 LibraryResource.description.ilike(f"%{search}%"),
-                LibraryResource.tags.any(f"%{search}%"),
+                func.array_to_string(LibraryResource.tags, ",").ilike(f"%{search}%"),
             )
         )
     if category:
@@ -106,7 +106,7 @@ async def get_resource(
 @router.post("/", response_model=APIResponse[dict], status_code=201, summary="Add a library resource")
 async def create_resource(
     payload: ResourceCreate,
-    _: CurrentUser = Depends(require_roles(MANAGER_ROLES)),
+    _: User = Depends(require_roles(MANAGER_ROLES)),
     db: AsyncSession = Depends(get_db),
 ):
     if not payload.url and not payload.file_path:

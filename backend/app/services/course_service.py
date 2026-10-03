@@ -2,34 +2,34 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from app.models.course import Course, Lesson, LearningPath, Module
+from app.core.cache import course_cache
+from app.models.course import Course, LearningPath, Module
 from app.models.mission import Mission
 
 
 class CourseService:
     @staticmethod
     async def get_course_structure(db: AsyncSession, course_id: UUID) -> dict | None:
-        result = await db.execute(select(Course).where(Course.id == course_id))
+        cache_key = f"structure:{course_id}"
+        cached = await course_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        result = await db.execute(
+            select(Course)
+            .where(Course.id == course_id)
+            .options(selectinload(Course.modules).selectinload(Module.lessons))
+        )
         course = result.scalar_one_or_none()
         if not course:
             return None
 
-        module_result = await db.execute(
-            select(Module)
-            .where(Module.course_id == course_id)
-            .order_by(Module.order)
-        )
-        modules = module_result.scalars().all()
-
         structure = []
-        for module in modules:
-            lesson_result = await db.execute(
-                select(Lesson)
-                .where(Lesson.module_id == module.id)
-                .order_by(Lesson.order)
-            )
-            lessons = lesson_result.scalars().all()
+        for module in sorted(course.modules, key=lambda m: m.order):
+            lessons = sorted(module.lessons, key=lambda l: l.order)
+            module_meta = module.meta_data or {}
             structure.append(
                 {
                     "id": str(module.id),
@@ -37,6 +37,8 @@ class CourseService:
                     "description": module.description,
                     "order": module.order,
                     "estimated_minutes": module.estimated_minutes,
+                    "resource_type": module_meta.get("resource_type"),
+                    "resource_label": module_meta.get("resource_label"),
                     "lessons": [
                         {
                             "id": str(lesson.id),
@@ -47,18 +49,22 @@ class CourseService:
                             "estimated_minutes": lesson.estimated_minutes,
                             "xp_reward": lesson.xp_reward,
                             "is_premium": lesson.is_premium,
+                            "resources": lesson.resources or [],
                         }
                         for lesson in lessons
                     ],
                 }
             )
 
-        return {
+        result_dict = {
             "id": str(course.id),
             "name": course.name,
             "description": course.description,
             "modules": structure,
         }
+        
+        await course_cache.set(cache_key, result_dict, ttl=600)
+        return result_dict
 
     @staticmethod
     async def search(
@@ -69,6 +75,11 @@ class CourseService:
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list, int]:
+        cache_key = f"search:q={query}:d={difficulty}:p={premium_only}:page={page}:size={page_size}"
+        cached = await course_cache.get(cache_key)
+        if cached is not None:
+            return cached["courses"], cached["total"]
+
         stmt = select(Course).where(Course.status == "published")
 
         if query:
@@ -83,17 +94,33 @@ class CourseService:
 
         stmt = stmt.order_by(Course.order).offset((page - 1) * page_size).limit(page_size)
         result = await db.execute(stmt)
-        return list(result.scalars().all()), total
+        courses = list(result.scalars().all())
+        
+        await course_cache.set(cache_key, {"courses": courses, "total": total}, ttl=300)
+        return courses, total
 
     @staticmethod
     async def list_learning_paths(db: AsyncSession) -> list:
+        cache_key = "learning_paths:all"
+        cached = await course_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         result = await db.execute(
             select(LearningPath).where(LearningPath.status == "published").order_by(LearningPath.order)
         )
-        return list(result.scalars().all())
+        paths = list(result.scalars().all())
+        
+        await course_cache.set(cache_key, paths, ttl=600)
+        return paths
 
     @staticmethod
     async def list_missions(db: AsyncSession, mission_type: str | None = None, page: int = 1, page_size: int = 20) -> tuple[list, int]:
+        cache_key = f"missions:type={mission_type}:page={page}:size={page_size}"
+        cached = await course_cache.get(cache_key)
+        if cached is not None:
+            return cached["missions"], cached["total"]
+
         stmt = select(Mission).where(Mission.status == "published")
         if mission_type:
             stmt = stmt.where(Mission.mission_type == mission_type)
@@ -103,4 +130,7 @@ class CourseService:
 
         stmt = stmt.order_by(Mission.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
         result = await db.execute(stmt)
-        return list(result.scalars().all()), total
+        missions = list(result.scalars().all())
+        
+        await course_cache.set(cache_key, {"missions": missions, "total": total}, ttl=300)
+        return missions, total

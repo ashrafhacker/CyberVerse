@@ -18,11 +18,12 @@ Asset layout:
 """
 
 from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_optional_user, get_db
 from app.models.user import User
 
 router = APIRouter()
@@ -33,6 +34,15 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[6]
 ASSETS_ROOT = _PROJECT_ROOT / "assets" / "courses"
 
 ALLOWED_EXTENSIONS = {".mp4", ".pdf"}
+
+# Map asset directory roots to course slugs in the database so enrollment
+# can be enforced per course. Unknown roots are treated as free previews.
+_ASSET_COURSE_SLUGS = {
+    "ceh-v12": "ceh-v12-official-modules",
+    "ceh-v12-specialization": "ceh-v12-system-and-network-security",
+    "hands-on-hacking/burp-suite": "burp-suite-live-practical",
+    "hands-on-hacking/http-debugger": "http-debugger-pro",
+}
 
 
 def _resolve_asset(relative_path: str) -> Path:
@@ -68,7 +78,7 @@ def _resolve_asset(relative_path: str) -> Path:
 )
 async def stream_asset(
     path: str = Query(..., description="Relative path inside assets/courses/"),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ) -> FileResponse:
     """
@@ -79,12 +89,38 @@ async def stream_asset(
     """
     resolved = _resolve_asset(path)
 
-    # Admins / developers / super_admin bypass enrollment check
+    # Admins / developers / super_admin / instructors bypass enrollment check
     bypass_roles = {"administrator", "developer", "super_admin", "instructor"}
-    if current_user.role not in bypass_roles:
-        # TODO: check enrollment in DB — for now allow all authenticated users
-        # while the enrollment model is being built out.
+    if current_user is not None and current_user.role in bypass_roles:
         pass
+    else:
+        parts = resolved.relative_to(ASSETS_ROOT).as_posix().split("/")
+        asset_root = "/".join(parts[:2])
+        course_slug = _ASSET_COURSE_SLUGS.get(asset_root) or _ASSET_COURSE_SLUGS.get(parts[0])
+        if course_slug:
+            from sqlalchemy import select
+
+            from app.models.course import Course
+            from app.models.progress import Enrollment
+
+            course_result = await db.execute(
+                select(Course.id).where(Course.slug == course_slug)
+            )
+            course_id = course_result.scalar_one_or_none()
+            if course_id:
+                if current_user is None:
+                    raise HTTPException(status_code=401, detail="Authentication required for this course")
+                enrolled = await db.execute(
+                    select(Enrollment.id).where(
+                        Enrollment.user_id == current_user.id,
+                        Enrollment.course_id == course_id,
+                    )
+                )
+                if not enrolled.scalar_one_or_none():
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Enroll in this course to access its materials",
+                    )
 
     media_type_map = {
         ".mp4": "video/mp4",
@@ -95,11 +131,28 @@ async def stream_asset(
     return FileResponse(
         path=str(resolved),
         media_type=media_type,
-        filename=resolved.name,
+        filename=None,
         headers={
             # Allow range requests so browsers can seek in videos
             "Accept-Ranges": "bytes",
             "Cache-Control": "private, max-age=3600",
+            # Force inline viewing and discourage download/direct save
+            "Content-Disposition": "inline",
+            "X-Content-Type-Options": "nosniff",
+            # The lesson player embeds this URL in a same-origin <iframe>
+            # (Next.js rewrites /api/* to the backend). The global
+            # SecurityHeadersMiddleware sets X-Frame-Options: DENY via
+            # setdefault, which Firefox refuses to frame — SAMEORIGIN here
+            # is kept instead and allows the built-in PDF/video viewer.
+            "X-Frame-Options": "SAMEORIGIN",
+            # frame-ancestors (where supported) takes precedence over
+            # X-Frame-Options; only same-origin framing is allowed, and the
+            # relaxed default-src lets browser PDF viewers render inline.
+            "Content-Security-Policy": (
+                "default-src 'self' blob: data: 'unsafe-inline'; "
+                "img-src 'self' data: blob:; "
+                "frame-ancestors 'self'"
+            ),
         },
     )
 
@@ -110,12 +163,15 @@ async def stream_asset(
 )
 async def list_assets(
     course: str | None = Query(None, description="Filter by course slug"),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_optional_user),
 ) -> dict:
     """
     Return a structured manifest of all available course assets.
     Optionally filter by course slug (e.g. 'ceh-v12', 'hands-on-hacking').
     """
+    if current_user is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
     results: list[dict] = []
 
     search_root = ASSETS_ROOT

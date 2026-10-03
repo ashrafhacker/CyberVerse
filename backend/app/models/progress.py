@@ -1,23 +1,28 @@
 import enum
-from datetime import datetime, timezone
-from typing import Optional, Dict
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Optional
 from uuid import uuid4
 
 from sqlalchemy import (
-    String,
-    Text,
-    Integer,
     DateTime,
-    Boolean,
-    Enum as SQLEnum,
     ForeignKey,
     Index,
+    Integer,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB
+from sqlalchemy import (
+    Enum as SQLEnum,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+if TYPE_CHECKING:
+    from app.models.course import Course, Lesson
+    from app.models.certificate import Certificate
+    from app.models.user import User
 
 
 class ProgressStatus(str, enum.Enum):
@@ -40,7 +45,6 @@ class PlayerProgress(Base):
         PGUUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     total_xp: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -54,33 +58,33 @@ class PlayerProgress(Base):
 
     learning_streak: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     longest_streak: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    last_active_day: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_active_day: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     time_spent_seconds: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
-    current_mission_id: Mapped[Optional[PGUUID]] = mapped_column(
+    current_mission_id: Mapped[PGUUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("missions.id", ondelete="SET NULL"),
         nullable=True,
     )
-    current_course_id: Mapped[Optional[PGUUID]] = mapped_column(
+    current_course_id: Mapped[PGUUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("courses.id", ondelete="SET NULL"),
         nullable=True,
     )
 
-    statistics: Mapped[Dict] = mapped_column(JSONB, default=dict, nullable=False)
-    metadata: Mapped[Dict] = mapped_column(JSONB, default=dict, nullable=False)
+    statistics: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    meta_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
 
@@ -121,21 +125,21 @@ class LessonProgress(Base):
     attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     time_spent_seconds: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
-    last_position: Mapped[Optional[Dict]] = mapped_column(JSONB, nullable=True)
-    metadata: Mapped[Dict] = mapped_column(JSONB, default=dict, nullable=False)
+    last_position: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    meta_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
-    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
 
@@ -171,12 +175,12 @@ class Enrollment(Base):
 
     enrolled_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    metadata: Mapped[Dict] = mapped_column(JSONB, default=dict, nullable=False)
+    meta_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
     course: Mapped["Course"] = relationship("Course", back_populates="enrollments")  # noqa: F821
     certificate: Mapped[Optional["Certificate"]] = relationship(  # noqa: F821
@@ -203,10 +207,10 @@ class LearningStreak(Base):
     coins_earned: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     activities_completed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
-    metadata: Mapped[Dict] = mapped_column(JSONB, default=dict, nullable=False)
+    meta_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )

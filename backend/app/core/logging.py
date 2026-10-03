@@ -1,13 +1,12 @@
 import logging
 import sys
-from typing import Any
+from typing import Any, Callable, MutableMapping, Mapping
 
 import structlog
 
 
 def setup_logging(level: str = "INFO", json_format: bool = True) -> None:
     """Configure structured logging for the application."""
-
     log_level = getattr(logging, level.upper(), logging.INFO)
 
     logging.basicConfig(
@@ -16,7 +15,7 @@ def setup_logging(level: str = "INFO", json_format: bool = True) -> None:
         level=log_level,
     )
 
-    processors = [
+    processors: list[Callable[[Any, str, MutableMapping[str, Any]], Mapping[str, Any] | str | bytes | bytearray | tuple[Any, ...]]] = [
         structlog.contextvars.merge_contextvars,
         structlog.processors.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),
@@ -36,8 +35,8 @@ def setup_logging(level: str = "INFO", json_format: bool = True) -> None:
     )
 
 
-def get_logger(name: str = "cyberverse"):
+def get_logger(name: str = "cyberverse") -> structlog.BoundLogger:
     return structlog.get_logger(name)
 
 
-logger = get_logger()
+logger: structlog.BoundLogger = get_logger()
