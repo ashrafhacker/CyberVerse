@@ -89,7 +89,7 @@ type Interceptor = {
 // Constants & Storage
 // ---------------------------------------------------------------------------
 
-const REQUEST_TIMEOUT_MS = 10_000; // Reduced from 15s
+const REQUEST_TIMEOUT_MS = 30_000; // 10s was too aggressive (dev reloads, cold structure builds)
 const MAX_RETRIES = 2;
 const RETRY_BASE_DELAY_MS = 200; // Reduced from 300
 const TOKEN_KEY = 'cyberverse_access_token';
@@ -369,7 +369,17 @@ export async function apiRequest<T = unknown>(rawPath: string, options: RequestO
 
     // Retry loop with exponential backoff for retryable statuses
     while (true) {
-      res = await attemptRequest();
+      try {
+        res = await attemptRequest();
+      } catch (err) {
+        // Client-side timeout is transient too — retry with backoff like a 5xx
+        if (err instanceof ApiError && err.code === 'timeout' && attempt < retries) {
+          await delay(jitter(retryDelayMs * Math.pow(2, attempt)));
+          attempt += 1;
+          continue;
+        }
+        throw err;
+      }
       if (!res.ok && (res.status >= 500 || res.status === 429) && attempt < retries) {
         const backoff = jitter(retryDelayMs * Math.pow(2, attempt));
         // Respect Retry-After if present

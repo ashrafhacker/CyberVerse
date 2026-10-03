@@ -43,6 +43,24 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://assets.cesium.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://api.cesium.com" />
         <link rel="dns-prefetch" href="https://assets.cesium.com" />
+        {/* Fonts: async (media="print" → "all" on load) so they never block
+            first paint — previously two render-blocking @imports in globals.css.
+            Single combined request; JetBrains Mono added (referenced by the
+            design system but never loaded before). */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700&family=Rethink+Sans:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Tillana:wght@400;500;600;700&family=Geist:wght@400;500;600;700&family=Urbanist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+          media="print"
+          onLoad={(e) => { e.currentTarget.media = 'all'; }}
+        />
+        <noscript>
+          <link
+            rel="stylesheet"
+            href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700&family=Rethink+Sans:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Tillana:wght@400;500;600;700&family=Geist:wght@400;500;600;700&family=Urbanist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+          />
+        </noscript>
       </head>
       <body suppressHydrationWarning>
         <AuthProvider>

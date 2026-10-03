@@ -6,6 +6,11 @@ const nextConfig = {
   transpilePackages: ['cesium'],
   experimental: {
     optimizePackageImports: ['lucide-react', 'framer-motion', 'motion', '@radix-ui/react-icons', 'cesium'],
+    // Dev proxy hard-kills streams after 30s of socket inactivity (http-proxy
+    // proxyTimeout), which broke video playback whenever the player paused
+    // reading while its buffer was full (500 "Internal Server Error" mid-stream).
+    // A large value effectively disables it; schema requires a number >= 0.
+    proxyTimeout: 3600000,
   },
   turbopack: {
     rules: {

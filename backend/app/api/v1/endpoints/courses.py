@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import CurrentUser
+from app.api.deps import CurrentUser, OptionalUser
 from app.core.database import get_db
 from app.models.course import Course, Lesson, Module, Quiz
 from app.schemas.base import APIResponse, PaginatedResponse
@@ -76,7 +76,7 @@ async def list_learning_paths(
 @router.get("/{course_id_or_slug}", response_model=APIResponse[dict], summary="Get course with structure")
 async def get_course(
     course_id_or_slug: str,
-    user: CurrentUser,
+    user: OptionalUser,  # public browse — no login wall for course content
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -95,13 +95,15 @@ async def get_course(
 
     from app.models.progress import Enrollment
 
-    enrollment_result = await db.execute(
-        select(Enrollment).where(
-            Enrollment.user_id == user.id,
-            Enrollment.course_id == course.id,
+    enrollment = None
+    if user is not None:
+        enrollment_result = await db.execute(
+            select(Enrollment).where(
+                Enrollment.user_id == user.id,
+                Enrollment.course_id == course.id,
+            )
         )
-    )
-    enrollment = enrollment_result.scalar_one_or_none()
+        enrollment = enrollment_result.scalar_one_or_none()
 
     return APIResponse[dict](
         data={

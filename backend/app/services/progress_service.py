@@ -179,8 +179,10 @@ class ProgressService:
             if not was_completed:
                 # Award rewards on first completion
                 rewards = await ProgressService._award_lesson_completion(db, user_id, lesson_id)
-                lesson_progress.xp_earned += rewards.get("xp", 0)
-                lesson_progress.coins_earned += rewards.get("coins", 0)
+                # Column defaults only apply at flush — a fresh (unflushed)
+                # record still reads None here, so coerce before adding.
+                lesson_progress.xp_earned = (lesson_progress.xp_earned or 0) + rewards.get("xp", 0)
+                lesson_progress.coins_earned = (lesson_progress.coins_earned or 0) + rewards.get("coins", 0)
 
         if progress_percentage is not None:
             lesson_progress.progress_percentage = max(
@@ -195,8 +197,8 @@ class ProgressService:
             if watched_seconds is not None:
                 last_position["watched_seconds"] = round(float(watched_seconds), 1)
             lesson_progress.last_position = last_position
-        lesson_progress.time_spent_seconds += time_spent
-        lesson_progress.attempts += 1
+        lesson_progress.time_spent_seconds = (lesson_progress.time_spent_seconds or 0) + time_spent
+        lesson_progress.attempts = (lesson_progress.attempts or 0) + 1
 
         await db.commit()
         await db.refresh(lesson_progress)

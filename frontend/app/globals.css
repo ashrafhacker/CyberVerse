@@ -1,6 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@400;500;600;700&display=swap");
 @import "./originkit-section-themes.css";
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700&family=Rethink+Sans:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Tillana:wght@400;500;600;700&family=Geist:wght@400;500;600;700&family=Urbanist:wght@400;500;600;700&display=swap");
 @import "./originkit-section-theme.css";
 @import "tailwindcss";
 @config "../tailwind.config.ts";
