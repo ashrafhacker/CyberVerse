@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_optional_user, get_db
+from app.api.deps import get_db, get_optional_user
 from app.core.config import get_settings
 from app.core.r2_storage import get_r2_bucket, get_r2_client, is_missing_object_error
 from app.models.user import User
