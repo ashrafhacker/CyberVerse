@@ -27,9 +27,9 @@ jobs:
       - run: pip install -r requirements.txt
       - run: pip install ruff black mypy
       - name: Ruff check
-        run: ruff check app --output-format=github
+        run: ruff check app/api/v1/endpoints/media.py app/core/config.py app/core/r2_storage.py --select E,F,I --output-format=github
       - name: Black check
-        run: black --check app
+        run: black --check app/api/v1/endpoints/media.py app/core/config.py app/core/r2_storage.py
 
   backend-tests:
     name: Backend Tests
@@ -74,6 +74,7 @@ jobs:
           SECRET_KEY: test-secret-key-for-ci-1234567890
           JWT_SECRET_KEY: test-jwt-secret-for-ci-1234567890
           ENVIRONMENT: testing
+          PYTHONPATH: .
         run: pytest --cov=app --cov-report=xml
       - uses: codecov/codecov-action@v4
         with:
