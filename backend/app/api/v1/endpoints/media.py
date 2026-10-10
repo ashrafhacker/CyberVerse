@@ -1,42 +1,32 @@
-"""
-media.py — Authenticated media file serving endpoint.
+"""Authenticated course media serving with Cloudflare R2 and local fallback.
 
-Serves video (MP4) and PDF files stored in the assets/courses directory.
-All files require a valid JWT token. Free-preview lessons are accessible
-to any authenticated user; all others require course enrollment.
+R2 object keys mirror paths under assets/courses/, e.g.
+  ceh-v12/pdfs/module01.pdf
+  hands-on-hacking/burp-suite/lesson01.mp4
 
-Asset layout:
-    assets/courses/
-        ceh-v12/pdfs/                CEH v12 Module01-20.pdf
-        ceh-v12-specialization/
-            ethical-hacking-fundamentals/  …/*.mp4
-            system-and-network-security/   …/*.mp4
-            advanced-cybersecurity/        …/*.mp4
-        hands-on-hacking/
-            burp-suite/    …/*.mp4
-            http-debugger/ …/*.mp4
+Private objects are never made public: this endpoint checks course access first,
+then redirects to a short-lived, signed R2 GET URL. If an object has not yet been
+migrated, the existing local file is served as a compatibility fallback.
 """
 
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
+from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import FileResponse, RedirectResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_optional_user, get_db
+from app.api.deps import get_db, get_optional_user
+from app.core.config import get_settings
+from app.core.r2_storage import get_r2_bucket, get_r2_client, is_missing_object_error
 from app.models.user import User
 
 router = APIRouter()
-
-# Root directory of all course assets — two levels above this file:
-#   backend/app/api/v1/endpoints/media.py  →  project root  →  assets/courses
 _PROJECT_ROOT = Path(__file__).resolve().parents[6]
 ASSETS_ROOT = _PROJECT_ROOT / "assets" / "courses"
-
 ALLOWED_EXTENSIONS = {".mp4", ".pdf"}
-
-# Map asset directory roots to course slugs in the database so enrollment
-# can be enforced per course. Unknown roots are treated as free previews.
 _ASSET_COURSE_SLUGS = {
     "ceh-v12": "ceh-v12-official-modules",
     "ceh-v12-specialization": "ceh-v12-system-and-network-security",
@@ -45,157 +35,192 @@ _ASSET_COURSE_SLUGS = {
 }
 
 
-def _resolve_asset(relative_path: str) -> Path:
-    """
-    Safely resolve a relative asset path inside ASSETS_ROOT.
-    Raises 400 if the path tries to escape the assets directory.
-    """
-    try:
-        resolved = (ASSETS_ROOT / relative_path).resolve()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid path")
-
-    if not resolved.is_relative_to(ASSETS_ROOT):
-        raise HTTPException(status_code=403, detail="Path traversal not allowed")
-
-    if resolved.suffix.lower() not in ALLOWED_EXTENSIONS:
+def _normalize_asset_path(relative_path: str) -> str:
+    """Normalize a URL path and reject traversal, absolute paths, and bad extensions."""
+    if not relative_path or "\\" in relative_path or "\x00" in relative_path:
+        raise HTTPException(status_code=400, detail="Invalid asset path")
+    path = PurePosixPath(relative_path)
+    if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
+        raise HTTPException(status_code=400, detail="Path traversal not allowed")
+    key = path.as_posix()
+    if Path(key).suffix.lower() not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail="File type not allowed")
-
-    if not resolved.exists():
-        raise HTTPException(status_code=404, detail="Asset not found")
-
-    return resolved
+    return key
 
 
-@router.get(
-    "/stream",
-    summary="Stream a course video or PDF",
-    responses={
-        200: {"description": "File streamed successfully"},
-        403: {"description": "Not enrolled or not authenticated"},
-        404: {"description": "Asset not found"},
-    },
-)
-async def stream_asset(
-    path: str = Query(..., description="Relative path inside assets/courses/"),
-    current_user: User | None = Depends(get_optional_user),
-    db: AsyncSession = Depends(get_db),
-) -> FileResponse:
-    """
-    Stream a course asset file.
+def _local_path(key: str) -> Path | None:
+    root = ASSETS_ROOT.resolve()
+    candidate = (root / key).resolve()
+    if not candidate.is_relative_to(root):
+        raise HTTPException(status_code=403, detail="Path traversal not allowed")
+    return candidate if candidate.is_file() else None
 
-    - Authenticated users can access free-preview lessons.
-    - Full access requires course enrollment (or premium / admin role).
-    """
-    resolved = _resolve_asset(path)
 
-    # Admins / developers / super_admin / instructors bypass enrollment check
+async def _authorize_course_asset(key: str, current_user: User | None, db: AsyncSession) -> None:
     bypass_roles = {"administrator", "developer", "super_admin", "instructor"}
     if current_user is not None and current_user.role in bypass_roles:
-        pass
-    else:
-        parts = resolved.relative_to(ASSETS_ROOT).as_posix().split("/")
-        asset_root = "/".join(parts[:2])
-        course_slug = _ASSET_COURSE_SLUGS.get(asset_root) or _ASSET_COURSE_SLUGS.get(parts[0])
-        if course_slug:
-            from sqlalchemy import select
+        return
+    parts = key.split("/")
+    asset_root = "/".join(parts[:2])
+    course_slug = _ASSET_COURSE_SLUGS.get(asset_root) or _ASSET_COURSE_SLUGS.get(parts[0])
+    # Assets without a configured course mapping retain the existing preview behavior.
+    if not course_slug:
+        if current_user is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        return
+    from app.models.course import Course
+    from app.models.progress import Enrollment
 
-            from app.models.course import Course
-            from app.models.progress import Enrollment
+    course_result = await db.execute(select(Course.id).where(Course.slug == course_slug))
+    course_id = course_result.scalar_one_or_none()
+    if course_id is None:
+        # Fail closed: mapped course assets must never bypass authorization
+        # just because the course has not been seeded in the database.
+        raise HTTPException(status_code=404, detail="Course not found")
+    if current_user is None:
+        raise HTTPException(status_code=401, detail="Authentication required for this course")
+    enrolled = await db.execute(
+        select(Enrollment.id).where(
+            Enrollment.user_id == current_user.id,
+            Enrollment.course_id == course_id,
+        )
+    )
+    if enrolled.scalar_one_or_none() is None:
+        raise HTTPException(status_code=403, detail="Enroll in this course to access its materials")
 
-            course_result = await db.execute(
-                select(Course.id).where(Course.slug == course_slug)
+
+def _presign_get(key: str) -> str:
+    client = get_r2_client()
+    bucket = get_r2_bucket()
+    if client is None or not bucket:
+        raise RuntimeError("Cloudflare R2 is not configured")
+    settings = get_settings()
+    suffix = Path(key).suffix.lower()
+    content_type = "video/mp4" if suffix == ".mp4" else "application/pdf"
+    return client.generate_presigned_url(
+        "get_object",
+        Params={
+            "Bucket": bucket,
+            "Key": key,
+            "ResponseContentType": content_type,
+            "ResponseContentDisposition": "inline",
+        },
+        ExpiresIn=settings.SIGNED_URL_EXPIRE_SECONDS,
+    )
+
+
+@router.get("/stream", summary="Stream an authorized course video or PDF")
+async def stream_asset(
+    path: str = Query(..., description="Relative object path inside assets/courses/"),
+    current_user: User | None = Depends(get_optional_user),
+    db: AsyncSession = Depends(get_db),
+):
+    key = _normalize_asset_path(path)
+    await _authorize_course_asset(key, current_user, db)
+
+    client, bucket = get_r2_client(), get_r2_bucket()
+    if client is not None and bucket:
+        try:
+            await run_in_threadpool(client.head_object, Bucket=bucket, Key=key)
+            url = await run_in_threadpool(_presign_get, key)
+            return RedirectResponse(
+                url,
+                status_code=307,
+                headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
             )
-            course_id = course_result.scalar_one_or_none()
-            if course_id:
-                if current_user is None:
-                    raise HTTPException(status_code=401, detail="Authentication required for this course")
-                enrolled = await db.execute(
-                    select(Enrollment.id).where(
-                        Enrollment.user_id == current_user.id,
-                        Enrollment.course_id == course_id,
-                    )
-                )
-                if not enrolled.scalar_one_or_none():
+        except Exception as exc:
+            if not is_missing_object_error(exc):
+                # Do not silently fall back on auth, credential, or network errors.
+                if isinstance(exc, (ClientError, BotoCoreError)):
                     raise HTTPException(
-                        status_code=403,
-                        detail="Enroll in this course to access its materials",
-                    )
+                        status_code=502, detail="Private media storage is temporarily unavailable"
+                    ) from exc
+                raise
 
-    media_type_map = {
-        ".mp4": "video/mp4",
-        ".pdf": "application/pdf",
-    }
-    media_type = media_type_map.get(resolved.suffix.lower(), "application/octet-stream")
-
+    local_file = _local_path(key)
+    if local_file is None:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    media_type = "video/mp4" if local_file.suffix.lower() == ".mp4" else "application/pdf"
     return FileResponse(
-        path=str(resolved),
+        path=str(local_file),
         media_type=media_type,
         filename=None,
         headers={
-            # Allow range requests so browsers can seek in videos
             "Accept-Ranges": "bytes",
-            "Cache-Control": "private, max-age=3600",
-            # Force inline viewing and discourage download/direct save
+            "Cache-Control": "private, max-age=300",
             "Content-Disposition": "inline",
             "X-Content-Type-Options": "nosniff",
-            # The lesson player embeds this URL in a same-origin <iframe>
-            # (Next.js rewrites /api/* to the backend). The global
-            # SecurityHeadersMiddleware sets X-Frame-Options: DENY via
-            # setdefault, which Firefox refuses to frame — SAMEORIGIN here
-            # is kept instead and allows the built-in PDF/video viewer.
             "X-Frame-Options": "SAMEORIGIN",
-            # frame-ancestors (where supported) takes precedence over
-            # X-Frame-Options; only same-origin framing is allowed, and the
-            # relaxed default-src lets browser PDF viewers render inline.
-            "Content-Security-Policy": (
-                "default-src 'self' blob: data: 'unsafe-inline'; "
-                "img-src 'self' data: blob:; "
-                "frame-ancestors 'self'"
-            ),
+            "Content-Security-Policy": "default-src 'self' blob: data: 'unsafe-inline'; img-src 'self' data: blob:; frame-ancestors 'self'",
         },
     )
 
 
-@router.get(
-    "/manifest",
-    summary="List all available course assets",
-)
+@router.get("/manifest", summary="List available course media paths")
 async def list_assets(
-    course: str | None = Query(None, description="Filter by course slug"),
+    course: str | None = Query(None, description="Optional folder prefix to filter"),
     current_user: User | None = Depends(get_optional_user),
-) -> dict:
-    """
-    Return a structured manifest of all available course assets.
-    Optionally filter by course slug (e.g. 'ceh-v12', 'hands-on-hacking').
-    """
+):
     if current_user is None:
         raise HTTPException(status_code=401, detail="Authentication required")
+    raw_prefix = course or ""
+    if (
+        "\\" in raw_prefix
+        or "\x00" in raw_prefix
+        or PurePosixPath(raw_prefix).is_absolute()
+        or any(part in {".", ".."} for part in PurePosixPath(raw_prefix).parts)
+    ):
+        raise HTTPException(status_code=400, detail="Invalid course path")
+    prefix = raw_prefix.strip("/")
+    assets: dict[str, dict] = {}
 
-    results: list[dict] = []
-
-    search_root = ASSETS_ROOT
-    if course:
-        search_root = ASSETS_ROOT / course
-        if not search_root.exists():
-            raise HTTPException(status_code=404, detail=f"Course '{course}' not found")
-
-    for f in sorted(search_root.rglob("*")):
-        if f.is_file() and f.suffix.lower() in ALLOWED_EXTENSIONS:
-            relative = f.relative_to(ASSETS_ROOT).as_posix()
-            parts = relative.split("/")
-            results.append(
-                {
-                    "path": relative,
-                    "filename": f.name,
-                    "course": parts[0] if parts else "",
+    # Include local assets until the migration to R2 is complete.
+    search_root = (ASSETS_ROOT / prefix).resolve() if prefix else ASSETS_ROOT.resolve()
+    root = ASSETS_ROOT.resolve()
+    if search_root.is_relative_to(root) and search_root.exists():
+        for file in search_root.rglob("*"):
+            if file.is_file() and file.suffix.lower() in ALLOWED_EXTENSIONS:
+                key = file.relative_to(root).as_posix()
+                parts = key.split("/")
+                assets[key] = {
+                    "path": key,
+                    "filename": file.name,
+                    "course": parts[0],
                     "module": parts[1] if len(parts) > 2 else "",
-                    "type": "video" if f.suffix.lower() == ".mp4" else "pdf",
-                    "size_mb": round(f.stat().st_size / (1024 * 1024), 2),
+                    "type": "video" if file.suffix.lower() == ".mp4" else "pdf",
+                    "size_mb": round(file.stat().st_size / (1024 * 1024), 2),
+                    "storage": "local",
                 }
-            )
 
-    return {
-        "total": len(results),
-        "assets": results,
-    }
+    client, bucket = get_r2_client(), get_r2_bucket()
+    if client is not None and bucket:
+
+        def _list_r2():
+            paginator = client.get_paginator("list_objects_v2")
+            found = {}
+            for page in paginator.paginate(Bucket=bucket, Prefix=(prefix + "/") if prefix else ""):
+                for obj in page.get("Contents", []):
+                    key = obj["Key"]
+                    if Path(key).suffix.lower() not in ALLOWED_EXTENSIONS:
+                        continue
+                    parts = key.split("/")
+                    found[key] = {
+                        "path": key,
+                        "filename": parts[-1],
+                        "course": parts[0],
+                        "module": parts[1] if len(parts) > 2 else "",
+                        "type": "video" if Path(key).suffix.lower() == ".mp4" else "pdf",
+                        "size_mb": round(obj.get("Size", 0) / (1024 * 1024), 2),
+                        "storage": "r2",
+                    }
+            return found
+
+        try:
+            assets.update(await run_in_threadpool(_list_r2))
+        except (ClientError, BotoCoreError) as exc:
+            raise HTTPException(
+                status_code=502, detail="Private media storage is temporarily unavailable"
+            ) from exc
+
+    ordered = [assets[k] for k in sorted(assets)]
+    return {"total": len(ordered), "assets": ordered}
