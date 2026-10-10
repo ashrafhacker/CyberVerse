@@ -213,6 +213,11 @@ class Settings(BaseSettings):
 
     # -------------------------------------------------------------------
     # File Upload & Media
+    R2_ACCOUNT_ID: str | None = None
+    R2_ACCESS_KEY_ID: str | None = None
+    R2_SECRET_ACCESS_KEY: SecretStr | None = None
+    R2_BUCKET_NAME: str = "cyberverse-assets"
+    R2_ENDPOINT_URL: str | None = None
     # -------------------------------------------------------------------
     MAX_FILE_SIZE: int = Field(default=10 * 1024 * 1024, ge=1024, le=100 * 1024 * 1024)
     MAX_VIDEO_FILE_SIZE: int = Field(default=500 * 1024 * 1024)
