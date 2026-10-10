@@ -51,6 +51,7 @@ def _env_file_candidates() -> list[str]:
 # Settings
 # ---------------------------------------------------------------------------
 
+
 class Settings(BaseSettings):
     """
     Application-wide settings.
@@ -71,28 +72,55 @@ class Settings(BaseSettings):
     # Core Application
     # -------------------------------------------------------------------
     APP_NAME: str = Field(default="CyberVerse API", description="Human-readable service name")
-    APP_VERSION: str = Field(default="2.1.0-pro", description="Semantic version exposed at /version")
-    APP_DESCRIPTION: str = Field(default="Educational Cybersecurity Simulation Platform — Enterprise Edition")
+    APP_VERSION: str = Field(
+        default="2.1.0-pro", description="Semantic version exposed at /version"
+    )
+    APP_DESCRIPTION: str = Field(
+        default="Educational Cybersecurity Simulation Platform — Enterprise Edition"
+    )
     ENVIRONMENT: ENV = Field(default="development", description="Runtime environment")
-    DEBUG: bool = Field(default=False, description="Enable debug mode (verbose errors, auto-reload)")
-    SECRET_KEY: SecretStr = Field(default=SecretStr("change-me-please-32-chars-minimum-secret-key!!"), description="Master secret for signing (32+ chars)")
+    DEBUG: bool = Field(
+        default=False, description="Enable debug mode (verbose errors, auto-reload)"
+    )
+    SECRET_KEY: SecretStr = Field(
+        default=SecretStr("change-me-please-32-chars-minimum-secret-key!!"),
+        description="Master secret for signing (32+ chars)",
+    )
     API_V1_PREFIX: str = Field(default="/api/v1")
-    PUBLIC_API_URL: str | None = Field(default=None, description="Public base URL, e.g. https://api.cyberverse.io")
-    FRONTEND_URL: str = Field(default="http://localhost:3000", description="Frontend origin for CORS & redirect validation")
-    ALLOWED_HOSTS: list[str] = Field(default_factory=lambda: ["localhost", "127.0.0.1"], description="Trusted hosts for Host header validation")
+    PUBLIC_API_URL: str | None = Field(
+        default=None, description="Public base URL, e.g. https://api.cyberverse.io"
+    )
+    FRONTEND_URL: str = Field(
+        default="http://localhost:3000",
+        description="Frontend origin for CORS & redirect validation",
+    )
+    ALLOWED_HOSTS: list[str] = Field(
+        default_factory=lambda: ["localhost", "127.0.0.1"],
+        description="Trusted hosts for Host header validation",
+    )
 
     # -------------------------------------------------------------------
     # Database (PostgreSQL + SQLAlchemy async)
     # -------------------------------------------------------------------
-    DATABASE_URL: PostgresDsn | str = Field(default="postgresql://cyberverse:cyberverse@localhost:5432/cyberverse", description="Primary Postgres DSN (sync)")
+    DATABASE_URL: PostgresDsn | str = Field(
+        default="postgresql://cyberverse:cyberverse@localhost:5432/cyberverse",
+        description="Primary Postgres DSN (sync)",
+    )
     DATABASE_POOL_SIZE: int = Field(default=20, ge=1, le=100, description="SQLAlchemy pool_size")
     DATABASE_MAX_OVERFLOW: int = Field(default=30, ge=0, le=100)
     DATABASE_POOL_TIMEOUT: int = Field(default=15, ge=1, le=120)
-    DATABASE_POOL_RECYCLE: int = Field(default=1800, ge=300, le=7200, description="Recycle connections after N seconds")
+    DATABASE_POOL_RECYCLE: int = Field(
+        default=1800, ge=300, le=7200, description="Recycle connections after N seconds"
+    )
     DATABASE_POOL_PRE_PING: bool = Field(default=True)
     DATABASE_ECHO: bool = Field(default=False, description="Log all SQL statements (noisy)")
     DATABASE_STATEMENT_TIMEOUT_MS: int = Field(default=5000, ge=1000, le=60000)
-    DATABASE_CONNECT_ARGS: dict = Field(default_factory=lambda: {"command_timeout": 10, "server_settings": {"jit": "off", "application_name": "cyberverse-api"}})
+    DATABASE_CONNECT_ARGS: dict = Field(
+        default_factory=lambda: {
+            "command_timeout": 10,
+            "server_settings": {"jit": "off", "application_name": "cyberverse-api"},
+        }
+    )
 
     # Read replica (optional)
     DATABASE_REPLICA_URL: PostgresDsn | str | None = Field(default=None)
@@ -128,7 +156,9 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------
     # Authentication & Security
     # -------------------------------------------------------------------
-    JWT_SECRET_KEY: SecretStr = Field(default=SecretStr("change-me-please-32-chars-minimum-jwt-secret!!"))
+    JWT_SECRET_KEY: SecretStr = Field(
+        default=SecretStr("change-me-please-32-chars-minimum-jwt-secret!!")
+    )
     JWT_ALGORITHM: str = Field(default="HS256", pattern=r"^(HS256|HS384|HS512|RS256|RS512)$")
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30, ge=5, le=1440)
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=30, ge=1, le=90)
@@ -175,11 +205,23 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------
     # CORS & HTTP
     # -------------------------------------------------------------------
-    CORS_ORIGINS: list[str] = Field(default_factory=lambda: ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"])
+    CORS_ORIGINS: list[str] = Field(
+        default_factory=lambda: [
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "http://127.0.0.1:3000",
+        ]
+    )
     CORS_ALLOW_CREDENTIALS: bool = Field(default=True)
-    CORS_ALLOW_METHODS: list[str] = Field(default_factory=lambda: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
-    CORS_ALLOW_HEADERS: list[str] = Field(default_factory=lambda: ["Authorization", "Content-Type", "X-Request-ID", "X-CSRF-Token"])
-    CORS_EXPOSE_HEADERS: list[str] = Field(default_factory=lambda: ["X-Request-ID", "X-Response-Time-ms"])
+    CORS_ALLOW_METHODS: list[str] = Field(
+        default_factory=lambda: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    )
+    CORS_ALLOW_HEADERS: list[str] = Field(
+        default_factory=lambda: ["Authorization", "Content-Type", "X-Request-ID", "X-CSRF-Token"]
+    )
+    CORS_EXPOSE_HEADERS: list[str] = Field(
+        default_factory=lambda: ["X-Request-ID", "X-Response-Time-ms"]
+    )
     TRUSTED_PROXIES: list[str] = Field(default_factory=list)
 
     # Security headers
@@ -221,8 +263,18 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------
     MAX_FILE_SIZE: int = Field(default=10 * 1024 * 1024, ge=1024, le=100 * 1024 * 1024)
     MAX_VIDEO_FILE_SIZE: int = Field(default=500 * 1024 * 1024)
-    ALLOWED_FILE_TYPES: list[str] = Field(default_factory=lambda: ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"])
-    ALLOWED_VIDEO_TYPES: list[str] = Field(default_factory=lambda: ["video/mp4", "video/webm", "video/ogg"])
+    ALLOWED_FILE_TYPES: list[str] = Field(
+        default_factory=lambda: [
+            "image/jpeg",
+            "image/png",
+            "image/gif",
+            "image/webp",
+            "application/pdf",
+        ]
+    )
+    ALLOWED_VIDEO_TYPES: list[str] = Field(
+        default_factory=lambda: ["video/mp4", "video/webm", "video/ogg"]
+    )
     UPLOAD_DIR: str = Field(default="uploads")
     MEDIA_BASE_URL: str | None = None
     SIGNED_URL_EXPIRE_SECONDS: int = Field(default=3600, ge=300, le=86400)
@@ -309,7 +361,9 @@ class Settings(BaseSettings):
     FEATURE_GAME_ENABLED: bool = Field(default=True)
     FEATURE_AI_MENTOR_ENABLED: bool = Field(default=True)
     FEATURE_MAINTENANCE_MODE: bool = Field(default=False)
-    FEATURE_MAINTENANCE_MESSAGE: str = Field(default="CyberVerse is under maintenance. We'll be back shortly.")
+    FEATURE_MAINTENANCE_MESSAGE: str = Field(
+        default="CyberVerse is under maintenance. We'll be back shortly."
+    )
 
     # -------------------------------------------------------------------
     # Computed & Validation
@@ -356,7 +410,9 @@ class Settings(BaseSettings):
         if secret.startswith("change-me"):
             if os.getenv("ENVIRONMENT", "development") == "production":
                 raise ValueError("Default secret not allowed in production")
-            warnings.warn("Using default secret — not safe for production!", UserWarning, stacklevel=2)
+            warnings.warn(
+                "Using default secret — not safe for production!", UserWarning, stacklevel=2
+            )
         return v
 
     @field_validator("CORS_ORIGINS")
@@ -371,7 +427,11 @@ class Settings(BaseSettings):
     @classmethod
     def _validate_pool(cls, v: int) -> int:
         if v > 30:
-            warnings.warn(f"DATABASE_POOL_SIZE={v} is high — ensure DB max_connections allows it", UserWarning, stacklevel=2)
+            warnings.warn(
+                f"DATABASE_POOL_SIZE={v} is high — ensure DB max_connections allows it",
+                UserWarning,
+                stacklevel=2,
+            )
         return v
 
     @model_validator(mode="after")
@@ -382,7 +442,11 @@ class Settings(BaseSettings):
             if self.LOG_LEVEL == "DEBUG":
                 warnings.warn("LOG_LEVEL=DEBUG in production is verbose", UserWarning, stacklevel=2)
             if self.ENVIRONMENT == "production" and not self.SENTRY_DSN:
-                warnings.warn("SENTRY_DSN not set in production — observability degraded", UserWarning, stacklevel=2)
+                warnings.warn(
+                    "SENTRY_DSN not set in production — observability degraded",
+                    UserWarning,
+                    stacklevel=2,
+                )
         if self.is_testing:
             # Override to in-memory / dummy services for fast tests
             object.__setattr__(self, "EMAIL_BACKEND", "dummy")

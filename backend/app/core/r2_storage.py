@@ -7,6 +7,7 @@ Optional:
 
 Credentials must only be configured on the backend host; never expose them to the browser.
 """
+
 from functools import lru_cache
 
 import boto3
@@ -21,14 +22,20 @@ def get_r2_client():
     settings = get_settings()
     if not all((settings.R2_ACCOUNT_ID, settings.R2_ACCESS_KEY_ID, settings.R2_SECRET_ACCESS_KEY)):
         return None
-    endpoint = settings.R2_ENDPOINT_URL or f"https://{settings.R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+    endpoint = (
+        settings.R2_ENDPOINT_URL or f"https://{settings.R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+    )
     return boto3.client(
         "s3",
         endpoint_url=endpoint,
         aws_access_key_id=settings.R2_ACCESS_KEY_ID,
         aws_secret_access_key=settings.R2_SECRET_ACCESS_KEY.get_secret_value(),
         region_name="auto",
-        config=Config(signature_version="s3v4", s3={"addressing_style": "path"}, retries={"max_attempts": 3, "mode": "standard"}),
+        config=Config(
+            signature_version="s3v4",
+            s3={"addressing_style": "path"},
+            retries={"max_attempts": 3, "mode": "standard"},
+        ),
     )
 
 
@@ -44,4 +51,10 @@ def is_missing_object_error(exc: Exception) -> bool:
     return False
 
 
-__all__ = ["get_r2_client", "get_r2_bucket", "is_missing_object_error", "BotoCoreError", "ClientError"]
+__all__ = [
+    "get_r2_client",
+    "get_r2_bucket",
+    "is_missing_object_error",
+    "BotoCoreError",
+    "ClientError",
+]

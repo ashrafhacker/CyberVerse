@@ -8,6 +8,7 @@ Private objects are never made public: this endpoint checks course access first,
 then redirects to a short-lived, signed R2 GET URL. If an object has not yet been
 migrated, the existing local file is served as a compatibility fallback.
 """
+
 from pathlib import Path, PurePosixPath
 
 from botocore.exceptions import BotoCoreError, ClientError
@@ -78,10 +79,12 @@ async def _authorize_course_asset(key: str, current_user: User | None, db: Async
         raise HTTPException(status_code=404, detail="Course not found")
     if current_user is None:
         raise HTTPException(status_code=401, detail="Authentication required for this course")
-    enrolled = await db.execute(select(Enrollment.id).where(
-        Enrollment.user_id == current_user.id,
-        Enrollment.course_id == course_id,
-    ))
+    enrolled = await db.execute(
+        select(Enrollment.id).where(
+            Enrollment.user_id == current_user.id,
+            Enrollment.course_id == course_id,
+        )
+    )
     if enrolled.scalar_one_or_none() is None:
         raise HTTPException(status_code=403, detail="Enroll in this course to access its materials")
 
@@ -96,7 +99,12 @@ def _presign_get(key: str) -> str:
     content_type = "video/mp4" if suffix == ".mp4" else "application/pdf"
     return client.generate_presigned_url(
         "get_object",
-        Params={"Bucket": bucket, "Key": key, "ResponseContentType": content_type, "ResponseContentDisposition": "inline"},
+        Params={
+            "Bucket": bucket,
+            "Key": key,
+            "ResponseContentType": content_type,
+            "ResponseContentDisposition": "inline",
+        },
         ExpiresIn=settings.SIGNED_URL_EXPIRE_SECONDS,
     )
 
@@ -115,12 +123,18 @@ async def stream_asset(
         try:
             await run_in_threadpool(client.head_object, Bucket=bucket, Key=key)
             url = await run_in_threadpool(_presign_get, key)
-            return RedirectResponse(url, status_code=307, headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
+            return RedirectResponse(
+                url,
+                status_code=307,
+                headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
+            )
         except Exception as exc:
             if not is_missing_object_error(exc):
                 # Do not silently fall back on auth, credential, or network errors.
                 if isinstance(exc, (ClientError, BotoCoreError)):
-                    raise HTTPException(status_code=502, detail="Private media storage is temporarily unavailable") from exc
+                    raise HTTPException(
+                        status_code=502, detail="Private media storage is temporarily unavailable"
+                    ) from exc
                 raise
 
     local_file = _local_path(key)
@@ -128,10 +142,14 @@ async def stream_asset(
         raise HTTPException(status_code=404, detail="Asset not found")
     media_type = "video/mp4" if local_file.suffix.lower() == ".mp4" else "application/pdf"
     return FileResponse(
-        path=str(local_file), media_type=media_type, filename=None,
+        path=str(local_file),
+        media_type=media_type,
+        filename=None,
         headers={
-            "Accept-Ranges": "bytes", "Cache-Control": "private, max-age=300",
-            "Content-Disposition": "inline", "X-Content-Type-Options": "nosniff",
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "private, max-age=300",
+            "Content-Disposition": "inline",
+            "X-Content-Type-Options": "nosniff",
             "X-Frame-Options": "SAMEORIGIN",
             "Content-Security-Policy": "default-src 'self' blob: data: 'unsafe-inline'; img-src 'self' data: blob:; frame-ancestors 'self'",
         },
@@ -164,10 +182,19 @@ async def list_assets(
             if file.is_file() and file.suffix.lower() in ALLOWED_EXTENSIONS:
                 key = file.relative_to(root).as_posix()
                 parts = key.split("/")
-                assets[key] = {"path": key, "filename": file.name, "course": parts[0], "module": parts[1] if len(parts) > 2 else "", "type": "video" if file.suffix.lower() == ".mp4" else "pdf", "size_mb": round(file.stat().st_size / (1024 * 1024), 2), "storage": "local"}
+                assets[key] = {
+                    "path": key,
+                    "filename": file.name,
+                    "course": parts[0],
+                    "module": parts[1] if len(parts) > 2 else "",
+                    "type": "video" if file.suffix.lower() == ".mp4" else "pdf",
+                    "size_mb": round(file.stat().st_size / (1024 * 1024), 2),
+                    "storage": "local",
+                }
 
     client, bucket = get_r2_client(), get_r2_bucket()
     if client is not None and bucket:
+
         def _list_r2():
             paginator = client.get_paginator("list_objects_v2")
             found = {}
@@ -177,12 +204,23 @@ async def list_assets(
                     if Path(key).suffix.lower() not in ALLOWED_EXTENSIONS:
                         continue
                     parts = key.split("/")
-                    found[key] = {"path": key, "filename": parts[-1], "course": parts[0], "module": parts[1] if len(parts) > 2 else "", "type": "video" if Path(key).suffix.lower() == ".mp4" else "pdf", "size_mb": round(obj.get("Size", 0) / (1024 * 1024), 2), "storage": "r2"}
+                    found[key] = {
+                        "path": key,
+                        "filename": parts[-1],
+                        "course": parts[0],
+                        "module": parts[1] if len(parts) > 2 else "",
+                        "type": "video" if Path(key).suffix.lower() == ".mp4" else "pdf",
+                        "size_mb": round(obj.get("Size", 0) / (1024 * 1024), 2),
+                        "storage": "r2",
+                    }
             return found
+
         try:
             assets.update(await run_in_threadpool(_list_r2))
         except (ClientError, BotoCoreError) as exc:
-            raise HTTPException(status_code=502, detail="Private media storage is temporarily unavailable") from exc
+            raise HTTPException(
+                status_code=502, detail="Private media storage is temporarily unavailable"
+            ) from exc
 
     ordered = [assets[k] for k in sorted(assets)]
     return {"total": len(ordered), "assets": ordered}
