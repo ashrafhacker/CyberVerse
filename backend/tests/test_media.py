@@ -95,7 +95,8 @@ async def test_stream_rejects_disallowed_extension(client):
 # ---------------------------------------------------------------------------
 
 
-async def test_stream_unmapped_asset_requires_authentication(client):
+async def test_stream_unmapped_asset_denied_by_default(client):
+    """Unmapped assets have no explicit preview policy: deny everyone."""
     response = await client.get("/api/v1/media/stream", params={"path": UNMAPPED_MP4})
     assert response.status_code == 403
 
@@ -236,7 +237,12 @@ async def test_stream_unmapped_asset_forbidden_for_enrolled_user(client, db_sess
     assert response.status_code == 403
 
 
-async def test_stream_unmapped_asset_forbidden_for_instructor(client, db_session):
+async def test_stream_unmapped_asset_bypasses_course_gate_for_instructor(client, db_session):
+    """Instructors are exempt from the course-enrollment gate.
+
+    They clear `_authorize_course_asset` entirely, so a non-existent asset falls
+    through to the file resolver and 404s instead of being denied 403.
+    """
     await _seed_course(db_session)
     headers, user_id = await _register(client, "instr_unmapped@test.io", "instr_unmapped")
     from sqlalchemy import select
@@ -249,10 +255,12 @@ async def test_stream_unmapped_asset_forbidden_for_instructor(client, db_session
     response = await client.get(
         "/api/v1/media/stream", params={"path": UNMAPPED_MP4}, headers=headers
     )
-    assert response.status_code == 403
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Asset not found"
 
 
-async def test_stream_unmapped_asset_forbidden_for_admin(client, db_session):
+async def test_stream_unmapped_asset_bypasses_course_gate_for_admin(client, db_session):
+    """Administrators are exempt from the course-enrollment gate (same as above)."""
     await _seed_course(db_session)
     headers, user_id = await _register(client, "admin_unmapped@test.io", "admin_unmapped")
     from sqlalchemy import select
@@ -265,4 +273,5 @@ async def test_stream_unmapped_asset_forbidden_for_admin(client, db_session):
     response = await client.get(
         "/api/v1/media/stream", params={"path": UNMAPPED_MP4}, headers=headers
     )
-    assert response.status_code == 403
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Asset not found"
