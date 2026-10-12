@@ -14,6 +14,7 @@ Usage:
 """
 
 import asyncio
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -44,8 +45,11 @@ from app.models.progress import PlayerProgress  # noqa: E402
 from app.models.support import FAQItem  # noqa: E402
 from app.models.user import Profile, User, UserRole, UserStatus  # noqa: E402
 
-ADMIN_EMAIL = "admin@cyberverse.io"
-ADMIN_PASSWORD = "ChangeMe123!"
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@cyberverse.io")
+# The super-admin password must come from the environment. A hardcoded default
+# would create a known-credential SUPER_ADMIN account if this ever runs against
+# a real database, so production refuses to seed without one.
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 ADMIN_NAME = "CyberVerse Admin"
 
 
@@ -55,9 +59,20 @@ async def seed_admin(db: AsyncSession) -> None:
         print("[skip] admin already exists")
         return
 
+    if not ADMIN_PASSWORD:
+        if os.environ.get("ENVIRONMENT") == "production":
+            raise SystemExit(
+                "Refusing to seed the super-admin account: set ADMIN_PASSWORD in the environment "
+                "(and optionally ADMIN_EMAIL) before running scripts/seed.py in production."
+            )
+        print("[warn] ADMIN_PASSWORD not set — using an insecure development-only default.")
+        admin_password = "dev-only-change-me-1"
+    else:
+        admin_password = ADMIN_PASSWORD
+
     admin = User(
         email=ADMIN_EMAIL,
-        password_hash=hash_password(ADMIN_PASSWORD),
+        password_hash=hash_password(admin_password),
         full_name=ADMIN_NAME,
         role=UserRole.SUPER_ADMIN,
         status=UserStatus.ACTIVE,
@@ -793,7 +808,10 @@ async def main() -> None:
         await seed_misc(db)
 
     await engine.dispose()
-    print("\nSeed complete. Default admin: %s / %s" % (ADMIN_EMAIL, ADMIN_PASSWORD))
+    if ADMIN_PASSWORD:
+        print("\nSeed complete. Admin: %s (password supplied via ADMIN_PASSWORD)" % ADMIN_EMAIL)
+    else:
+        print("\nSeed complete. Admin: %s" % ADMIN_EMAIL)
 
 
 if __name__ == "__main__":

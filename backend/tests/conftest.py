@@ -27,12 +27,41 @@ from app.main import app  # noqa: E402
 
 def _make_engine():
     database_url = os.getenv("DATABASE_URL")
+    env = os.getenv("ENVIRONMENT", "").lower()
+
     if database_url:
-        if database_url.startswith("postgresql://"):
-            database_url = database_url.replace(
-                "postgresql://", "postgresql+asyncpg://", 1
-            )
-        return create_async_engine(database_url)
+        # Fail closed for shared/production-like databases
+        url_lower = database_url.lower()
+        dangerous_indicators = [
+            "production",
+            "prod",
+            "staging",
+            "stage",
+            "live",
+            "shared",
+            "master",
+            "main",
+        ]
+        # Allow CI to use postgres - preserve CI behavior
+        # Only block if it looks like production AND not explicitly in testing with CI-like setup
+        if env == "testing":
+            # Allow postgres in testing (CI)
+            if database_url.startswith("postgresql://"):
+                database_url = database_url.replace(
+                    "postgresql://", "postgresql+asyncpg://", 1
+                )
+            return create_async_engine(database_url)
+        else:
+            # Non-testing env - be extra careful
+            if any(ind in url_lower for ind in dangerous_indicators):
+                raise RuntimeError(
+                    "Test database fixture cannot use production/shared database URL in non-testing environment"
+                )
+            if database_url.startswith("postgresql://"):
+                database_url = database_url.replace(
+                    "postgresql://", "postgresql+asyncpg://", 1
+                )
+            return create_async_engine(database_url)
 
     temp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
     temp_db.close()
@@ -77,15 +106,34 @@ _TEST_REDIS_PREFIXES = ("ratelimit:*", "ctf:submit:*", "ai:*")
 async def clear_redis():
     """Delete only app-created test keys before and after each test.
 
-    This intentionally does NOT use FLUSHDB: flushing would empty the entire
-    configured Redis database, which is destructive when REDIS_URL points at
-    a shared instance. Each phase opens a short-lived connection because
-    RedisClient caches a single client bound to the first test's event loop.
+    Requires explicit test-only Redis configuration to prevent accidental deletion
+    of shared Redis data. Fail closed if isolation cannot be established.
     """
     import redis.asyncio as aioredis
 
+    settings = get_settings()
+    redis_url = settings.REDIS_URL
+    env = os.getenv("ENVIRONMENT", "").lower()
+
+    # Require explicit test-only configuration
+    redis_lower = str(redis_url).lower()
+    is_test_isolated = False
+
+    # Check for test-specific database index (common pattern: /15 for tests)
+    if redis_lower.endswith("/15") or "/test" in redis_lower:
+        is_test_isolated = True
+    # Also allow if using localhost in testing context
+    if env == "testing" and "localhost" in redis_lower:
+        is_test_isolated = True
+
+    if not is_test_isolated:
+        raise RuntimeError(
+            "Redis cleanup blocked: REDIS_URL must point to an isolated test Redis "
+            "(e.g., redis://localhost:6379/15) in testing environment"
+        )
+
     async def _wipe() -> None:
-        client = aioredis.from_url(get_settings().REDIS_URL)
+        client = aioredis.from_url(redis_url)
         try:
             for prefix in _TEST_REDIS_PREFIXES:
                 async for key in client.scan_iter(match=prefix):
@@ -96,13 +144,14 @@ async def clear_redis():
     try:
         await _wipe()
     except Exception:
-        # Redis unavailable: nothing to clear; tests handle absence gracefully.
-        pass
+        # Redis unavailable: raise to fail closed as isolation cannot be verified
+        raise RuntimeError("Redis unavailable - cannot establish test isolation")
+
     yield
     try:
         await _wipe()
     except Exception:
-        pass
+        raise RuntimeError("Redis unavailable during teardown - cannot verify cleanup")
 
 
 @pytest_asyncio.fixture

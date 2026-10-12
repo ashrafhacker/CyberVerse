@@ -24,7 +24,7 @@ from app.core.r2_storage import get_r2_bucket, get_r2_client, is_missing_object_
 from app.models.user import User
 
 router = APIRouter()
-_PROJECT_ROOT = Path(__file__).resolve().parents[6]
+_PROJECT_ROOT = Path(__file__).resolve().parents[5]
 ASSETS_ROOT = _PROJECT_ROOT / "assets" / "courses"
 ALLOWED_EXTENSIONS = {".mp4", ".pdf"}
 _ASSET_COURSE_SLUGS = {
@@ -63,11 +63,9 @@ async def _authorize_course_asset(key: str, current_user: User | None, db: Async
     parts = key.split("/")
     asset_root = "/".join(parts[:2])
     course_slug = _ASSET_COURSE_SLUGS.get(asset_root) or _ASSET_COURSE_SLUGS.get(parts[0])
-    # Assets without a configured course mapping retain the existing preview behavior.
+    # Assets without a configured course mapping: deny by default (no explicit preview policy)
     if not course_slug:
-        if current_user is None:
-            raise HTTPException(status_code=401, detail="Authentication required")
-        return
+        raise HTTPException(status_code=403, detail="Access denied")
     from app.models.course import Course
     from app.models.progress import Enrollment
 

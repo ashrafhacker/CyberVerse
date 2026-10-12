@@ -97,7 +97,7 @@ async def test_stream_rejects_disallowed_extension(client):
 
 async def test_stream_unmapped_asset_requires_authentication(client):
     response = await client.get("/api/v1/media/stream", params={"path": UNMAPPED_MP4})
-    assert response.status_code == 401
+    assert response.status_code == 403
 
 
 async def test_stream_mapped_asset_fails_closed_when_course_not_seeded(client):
@@ -224,3 +224,45 @@ async def test_manifest_lists_local_assets_for_authenticated_user(client, tmp_pa
     entry = next(a for a in payload["assets"] if a["path"] == "ceh-v12/pdfs/module01.pdf")
     assert entry["storage"] == "local"
     assert entry["type"] == "pdf"
+
+
+async def test_stream_unmapped_asset_forbidden_for_enrolled_user(client, db_session):
+    course = await _seed_course(db_session)
+    headers, user_id = await _register(client, "enrolled_unmapped@test.io", "enrolled_unmapped")
+    await _enroll(db_session, user_id, course)
+    response = await client.get(
+        "/api/v1/media/stream", params={"path": UNMAPPED_MP4}, headers=headers
+    )
+    assert response.status_code == 403
+
+
+async def test_stream_unmapped_asset_forbidden_for_instructor(client, db_session):
+    await _seed_course(db_session)
+    headers, user_id = await _register(client, "instr_unmapped@test.io", "instr_unmapped")
+    from sqlalchemy import select
+    from app.models.user import User, UserRole
+    from uuid import UUID
+    result = await db_session.execute(select(User).where(User.id == UUID(user_id)))
+    user = result.scalar_one()
+    user.role = UserRole.INSTRUCTOR
+    await db_session.commit()
+    response = await client.get(
+        "/api/v1/media/stream", params={"path": UNMAPPED_MP4}, headers=headers
+    )
+    assert response.status_code == 403
+
+
+async def test_stream_unmapped_asset_forbidden_for_admin(client, db_session):
+    await _seed_course(db_session)
+    headers, user_id = await _register(client, "admin_unmapped@test.io", "admin_unmapped")
+    from sqlalchemy import select
+    from app.models.user import User, UserRole
+    from uuid import UUID
+    result = await db_session.execute(select(User).where(User.id == UUID(user_id)))
+    user = result.scalar_one()
+    user.role = UserRole.ADMINISTRATOR
+    await db_session.commit()
+    response = await client.get(
+        "/api/v1/media/stream", params={"path": UNMAPPED_MP4}, headers=headers
+    )
+    assert response.status_code == 403

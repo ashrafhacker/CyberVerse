@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import CurrentUser, require_admin, require_moderator
+from app.api.deps import CurrentUser, require_admin, require_moderator, require_super_admin
 from app.core.database import get_db
 from app.models.user import User, UserStatus
 from app.schemas.base import APIResponse, MessageResponse, PaginatedResponse
@@ -96,11 +96,11 @@ async def update_user_status(
     return APIResponse[dict](data=_serialize_user(user))
 
 
-@router.patch("/{user_id}/role", response_model=APIResponse[dict], summary="Update user role (admin)")
+@router.patch("/{user_id}/role", response_model=APIResponse[dict], summary="Update user role (super admin)")
 async def update_user_role(
     user_id: UUID,
     new_role: str,
-    _: User = Depends(require_admin),
+    current_user: User = Depends(require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     from app.models.user import UserRole
@@ -109,6 +109,9 @@ async def update_user_role(
         role = UserRole(new_role)
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid role: {new_role}")
+
+    if current_user.id == user_id:
+        raise HTTPException(status_code=400, detail="You cannot change your own role")
 
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()

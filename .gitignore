@@ -27,7 +27,21 @@ next-env.d.ts
 .env
 .env.local
 .env.*.local
-!.env.example
+**/.env.*
+!**/.env.example
+!**/.env.r2.example
+!**/.env.local.example
+
+# Credentials / secrets / data dumps
+credentials*.json
+service-account*.json
+*.sqlite3
+*.db
+*.bak
+*.tfvars
+.terraform/
+*.keystore
+*.jks
 
 # Secrets
 *.pem

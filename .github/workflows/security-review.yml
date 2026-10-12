@@ -1,0 +1,38 @@
+name: Security Review
+
+# AI security review of every pull request using Anthropic's Claude Code.
+# Requires the CLAUDE_API_KEY repository secret (enabled for Claude API +
+# Claude Code usage); the job skips cleanly when it has not been configured.
+permissions:
+  pull-requests: write
+  contents: read
+
+on:
+  pull_request:
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+
+      - name: Check Claude API key availability
+        id: keycheck
+        env:
+          KEY: ${{ secrets.CLAUDE_API_KEY }}
+        run: |
+          if [ -n "$KEY" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CLAUDE_API_KEY is not configured — skipping Claude security review."
+          fi
+
+      - uses: anthropics/claude-code-security-review@main
+        if: steps.keycheck.outputs.available == 'true'
+        with:
+          comment-pr: true
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}

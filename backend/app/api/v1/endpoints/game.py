@@ -100,7 +100,6 @@ def _challenge_out(challenge: GameChallenge) -> GameChallengeResponse:
             "time_limit": challenge.time_limit,
             "status": str(challenge.status),
             "is_published": challenge.is_published,
-            "flag_hash": challenge.flag_hash,
             "hints": list(challenge.hints or []),
             "environment_config": challenge.environment_config or {},
             "author_id": _str(challenge.author_id),
