@@ -91,7 +91,7 @@ export class GlobeAPI {
       params.set('east', bounds.east.toString());
       params.set('west', bounds.west.toString());
     }
-    const response = await api.get(`/threat-intel/map?${params.toString()}`);
+    const response = await api.get<{ data: ThreatIntelData }>(`/threat-intel/map?${params.toString()}`);
     return response.data;
   }
 
@@ -103,17 +103,17 @@ export class GlobeAPI {
       params.set('east', bounds.east.toString());
       params.set('west', bounds.west.toString());
     }
-    const response = await api.get(`/soc/map?${params.toString()}`);
+    const response = await api.get<{ data: SOCData }>(`/soc/map?${params.toString()}`);
     return response.data;
   }
 
   static async getNetworkTopology(labId: string): Promise<NetworkTopologyData> {
-    const response = await api.get(`/labs/${labId}/topology`);
+    const response = await api.get<{ data: NetworkTopologyData }>(`/labs/${labId}/topology`);
     return response.data;
   }
 
   static async getLabEnvironment(labId: string): Promise<LabEnvironmentData> {
-    const response = await api.get(`/labs/${labId}/environment`);
+    const response = await api.get<{ data: LabEnvironmentData }>(`/labs/${labId}/environment`);
     return response.data;
   }
 
@@ -127,7 +127,16 @@ export class GlobeAPI {
     source_location: { lat: number; lng: number };
     dest_location: { lat: number; lng: number };
   }>> {
-    const response = await api.get('/analytics/live-attacks');
+    const response = await api.get<{ data: Array<{
+    id: string;
+    source_ip: string;
+    dest_ip: string;
+    attack_type: string;
+    severity: string;
+    timestamp: string;
+    source_location: { lat: number; lng: number };
+    dest_location: { lat: number; lng: number };
+  }> }>('/analytics/live-attacks');
     return response.data;
   }
 
@@ -139,7 +148,14 @@ export class GlobeAPI {
     top_attack_types: string[];
     status: 'active' | 'inactive' | 'compromised';
   }>> {
-    const response = await api.get('/analytics/honeypots');
+    const response = await api.get<{ data: Array<{
+    id: string;
+    name: string;
+    location: { lat: number; lng: number };
+    attacks_24h: number;
+    top_attack_types: string[];
+    status: 'active' | 'inactive' | 'compromised';
+  }> }>('/analytics/honeypots');
     return response.data;
   }
 
@@ -148,7 +164,11 @@ export class GlobeAPI {
     count: number;
     locations: Array<{ lat: number; lng: number; count: number }>;
   }>> {
-    const response = await api.get('/analytics/malware-distribution');
+    const response = await api.get<{ data: Array<{
+    family: string;
+    count: number;
+    locations: Array<{ lat: number; lng: number; count: number }>;
+  }> }>('/analytics/malware-distribution');
     return response.data;
   }
 
@@ -158,7 +178,12 @@ export class GlobeAPI {
     count: number;
     locations: Array<{ lat: number; lng: number; count: number }>;
   }>> {
-    const response = await api.get('/analytics/vulnerability-heatmap');
+    const response = await api.get<{ data: Array<{
+    cve_id: string;
+    severity: string;
+    count: number;
+    locations: Array<{ lat: number; lng: number; count: number }>;
+  }> }>('/analytics/vulnerability-heatmap');
     return response.data;
   }
 }

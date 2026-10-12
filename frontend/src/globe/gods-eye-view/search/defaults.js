@@ -15,6 +15,15 @@ import { createPresetGeocoder } from './presetGeocoder.js';
  * `presets` is the caller's bundled place data. It is passed in rather than
  * imported so this package keeps reading no application state; with none
  * supplied there is simply no bundled-name provider.
+ *
+ * @param {object} [options]
+ * @param {() => string | undefined} [options.resolveApiKey]
+ * @param {(...args: any[]) => any} [options.fetchImpl]
+ * @param {AbortSignal} [options.signal]
+ * @param {Record<string, string>} [options.endpoints]
+ * @param {object} [options.providers]
+ * @param {any} [options.presets]
+ * @param {any} [options.geocoding]
  */
 export function createDefaultPlaceSearch({
   resolveApiKey,

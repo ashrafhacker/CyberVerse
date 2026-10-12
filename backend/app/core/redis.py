@@ -134,6 +134,8 @@ class RateLimiter:
         window_seconds: Optional[int] = None,
         scope: str = "default",
     ) -> bool:
+        if not settings.RATE_LIMIT_ENABLED:
+            return True
         limiter = cls.from_request(request, max_requests, window_seconds)
         forwarded = request.headers.get("x-forwarded-for")
         ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else "unknown")

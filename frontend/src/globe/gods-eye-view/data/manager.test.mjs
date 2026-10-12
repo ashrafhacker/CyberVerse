@@ -3157,7 +3157,7 @@ test('an async layer pushes its own row refresh, and a busy chip refuses clicks'
 
   let settled = false;
   let writes = 0;
-  const module = {
+  const layerModule = {
     id: 'satellites',
     name: 'Satellites',
     icon: '',
@@ -3184,15 +3184,15 @@ test('an async layer pushes its own row refresh, and a busy chip refuses clicks'
         legend: [],
       };
     },
-    setRowControlsListener(fn) { module._listener = fn; },
+    setRowControlsListener(fn) { layerModule._listener = fn; },
   };
-  mgr.register(module);
+  mgr.register(layerModule);
   const container = makeControlElement();
 
   try {
     mgr.buildTogglePanel(container);
     assert.equal(await mgr.setEnabled('satellites', true), true);
-    assert.equal(typeof module._listener, 'function', 'the manager installed its listener');
+    assert.equal(typeof layerModule._listener, 'function', 'the manager installed its listener');
 
     const controls = container
       .querySelector('[data-layer-id="satellites"]')
@@ -3209,7 +3209,7 @@ test('an async layer pushes its own row refresh, and a busy chip refuses clicks'
 
     // The layer settles and pushes its own refresh — no panel poll involved.
     settled = true;
-    module._listener();
+    layerModule._listener();
     mgr._layerPanel._flushRowControlsRefresh();
     assert.equal(chip.textContent, 'DENSE');
     assert.equal(chip.disabled, false);

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Flag, Clock, Star, Target, Lock, Brain, ExternalLink, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import Link from 'next/link';
 import { api } from '@/lib/api';
 
 interface GameChallenge {
@@ -49,7 +50,7 @@ export default function ChallengePage({ params }: { params: Promise<{ slug: stri
   async function fetchChallenge(slug: string) {
     setLoading(true);
     try {
-      const res = await api.get<GameChallenge>(`/game/challenges/${slug}`);
+      const res = await api.get<{ data: GameChallenge }>(`/game/challenges/${slug}`);
       setChallenge(res.data);
       setTimeRemaining(res.data.timeLimit * 60);
     } catch {
@@ -92,7 +93,7 @@ export default function ChallengePage({ params }: { params: Promise<{ slug: stri
     setResult(null);
 
     try {
-      const res = await api.post<{ correct: boolean; message: string; xpAwarded?: number }>(
+      const res = await api.post<{ data: { correct: boolean; message: string; xpAwarded?: number } }>(
         `/game/challenges/${challenge?.slug}/submit`,
         { flag: submittedFlag.trim() }
       );
@@ -282,7 +283,7 @@ export default function ChallengePage({ params }: { params: Promise<{ slug: stri
                     disabled={!environmentReady || submitting}
                   />
                   <p className="mt-1 text-xs text-cyber-muted">
-                    Format: CYBERVERSE{{flag_content}}. Flags are case-sensitive.
+                    {'Format: CYBERVERSE{flag_content}. Flags are case-sensitive.'}
                   </p>
                 </div>
                 <button

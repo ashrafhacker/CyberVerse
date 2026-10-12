@@ -1,6 +1,102 @@
 import type { Metadata } from 'next';
+import {
+  Red_Hat_Display,
+  Inter,
+  Inter_Tight,
+  Rethink_Sans,
+  Instrument_Sans,
+  Instrument_Serif,
+  Tillana,
+  Geist,
+  Urbanist,
+  JetBrains_Mono,
+} from 'next/font/google';
 import { AuthProvider } from '@/lib/auth';
 import './globals.css';
+
+const redHatDisplay = Red_Hat_Display({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-red-hat-display',
+  display: 'swap',
+});
+
+const inter = Inter({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-inter',
+  display: 'swap',
+});
+
+const interTight = Inter_Tight({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-inter-tight',
+  display: 'swap',
+});
+
+const rethinkSans = Rethink_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-rethink-sans',
+  display: 'swap',
+});
+
+const instrumentSans = Instrument_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-instrument-sans',
+  display: 'swap',
+});
+
+const instrumentSerif = Instrument_Serif({
+  subsets: ['latin'],
+  weight: ['400'],
+  style: ['normal', 'italic'],
+  variable: '--font-instrument-serif',
+  display: 'swap',
+});
+
+const tillana = Tillana({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-tillana',
+  display: 'swap',
+});
+
+const geist = Geist({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-geist',
+  display: 'swap',
+});
+
+const urbanist = Urbanist({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-urbanist',
+  display: 'swap',
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '700'],
+  variable: '--font-jetbrains-mono',
+  display: 'swap',
+});
+
+const fontVariables = [
+  redHatDisplay.variable,
+  inter.variable,
+  interTight.variable,
+  rethinkSans.variable,
+  instrumentSans.variable,
+  instrumentSerif.variable,
+  tillana.variable,
+  geist.variable,
+  urbanist.variable,
+  jetbrainsMono.variable,
+].join(' ');
 
 export const metadata: Metadata = {
   title: {
@@ -37,30 +133,15 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" className={`dark ${fontVariables}`} suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://api.cesium.com" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://assets.cesium.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://api.cesium.com" />
         <link rel="dns-prefetch" href="https://assets.cesium.com" />
-        {/* Fonts: async (media="print" → "all" on load) so they never block
-            first paint — previously two render-blocking @imports in globals.css.
-            Single combined request; JetBrains Mono added (referenced by the
-            design system but never loaded before). */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700&family=Rethink+Sans:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Tillana:wght@400;500;600;700&family=Geist:wght@400;500;600;700&family=Urbanist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
-          media="print"
-          onLoad={(e) => { e.currentTarget.media = 'all'; }}
-        />
-        <noscript>
-          <link
-            rel="stylesheet"
-            href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700&family=Rethink+Sans:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Tillana:wght@400;500;600;700&family=Geist:wght@400;500;600;700&family=Urbanist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
-          />
-        </noscript>
+        {/* Fonts are self-hosted via `next/font` (see font variables above) so
+            they never block first paint and require no external Google Fonts
+            request. */}
       </head>
       <body suppressHydrationWarning>
         <AuthProvider>

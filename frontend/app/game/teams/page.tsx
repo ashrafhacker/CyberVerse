@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Users, Plus, Search, ChevronLeft, ChevronRight, Flag, Trophy, Star, Lock, Shield } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { api } from '@/lib/api';
 
 interface Team {
@@ -36,14 +37,10 @@ export default function TeamsPage() {
   const [search, setSearch] = useState('');
   const pageSize = 12;
 
-  useEffect(() => {
-    fetchTeams();
-  }, [page, search]);
-
-  async function fetchTeams() {
+  const fetchTeams = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get<TeamsResponse>('/game/teams', {
+      const res = await api.get<{ data: TeamsResponse }>('/game/teams', {
         params: { page, pageSize, search: search || undefined },
       });
       setTeams(res.data.teams);
@@ -54,7 +51,11 @@ export default function TeamsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [page, search]);
+
+  useEffect(() => {
+    fetchTeams();
+  }, [fetchTeams]);
 
   return (
     <div className="min-h-screen bg-cyber-bg text-cyber-text">
@@ -124,7 +125,14 @@ export default function TeamsPage() {
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     {team.avatar ? (
-                      <img src={team.avatar} alt={team.name} className="h-10 w-10 rounded-full" />
+                      <Image
+                        src={team.avatar}
+                        alt={team.name}
+                        width={40}
+                        height={40}
+                        unoptimized
+                        className="h-10 w-10 rounded-full"
+                      />
                     ) : (
                       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-cyber-primary/20">
                         <Shield className="h-6 w-6 text-cyber-primary" />
@@ -159,9 +167,12 @@ export default function TeamsPage() {
 
                 <div className="flex items-center justify-between pt-4 border-t border-cyber-border">
                   <div className="flex items-center gap-2 text-xs text-cyber-muted">
-                    <img
+                    <Image
                       src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${team.captainName}`}
                       alt={team.captainName}
+                      width={24}
+                      height={24}
+                      unoptimized
                       className="h-6 w-6 rounded-full"
                     />
                     <span>Captain: {team.captainName}</span>

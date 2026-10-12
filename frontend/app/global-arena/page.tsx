@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Globe, Trophy, Flag, User, Star, ChevronLeft, ChevronRight } from 'lucide-react';
+import Image from 'next/image';
 import { api } from '@/lib/api';
 import Link from 'next/link';
 
@@ -41,14 +42,10 @@ export default function GlobalArenaPage() {
   const [total, setTotal] = useState(0);
   const pageSize = 50;
 
-  useEffect(() => {
-    fetchLeaderboard();
-  }, [activeTab, page]);
-
-  async function fetchLeaderboard() {
+  const fetchLeaderboard = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get<LeaderboardResponse>(
+      const res = await api.get<{ data: LeaderboardResponse }>(
         `/leaderboard/${activeTab}`,
         { params: { page, pageSize } }
       );
@@ -60,7 +57,11 @@ export default function GlobalArenaPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [activeTab, page]);
+
+  useEffect(() => {
+    fetchLeaderboard();
+  }, [fetchLeaderboard]);
 
   function getRankClass(rank: number) {
     if (rank === 1) return 'text-amber-400';
@@ -153,9 +154,12 @@ export default function GlobalArenaPage() {
                           className="flex items-center gap-2 font-medium hover:text-cyber-primary transition-colors"
                         >
                           {entry.avatar && (
-                            <img
+                            <Image
                               src={entry.avatar}
                               alt=""
+                              width={32}
+                              height={32}
+                              unoptimized
                               className="h-8 w-8 rounded-full bg-cyber-bg"
                             />
                           )}

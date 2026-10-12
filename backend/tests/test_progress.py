@@ -4,7 +4,7 @@ import pytest
 
 
 async def _register(client, email, username, name="Test Agent"):
-    return await client.post(
+    response = await client.post(
         "/api/v1/auth/register",
         json={
             "email": email,
@@ -14,6 +14,8 @@ async def _register(client, email, username, name="Test Agent"):
             "username": username,
         },
     )
+    assert response.status_code == 201, response.text
+    return response
 
 
 async def _auth_headers(client, email="agent@test.io", username="agent_test"):

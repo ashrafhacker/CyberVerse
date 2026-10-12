@@ -1,4 +1,4 @@
-import { Entity, Viewer, Cartesian3, Color, PinBuilder, LabelStyle, HeightReference } from 'cesium';
+import { Entity, Viewer, Cartesian2, Cartesian3, Color, PinBuilder, LabelStyle, HeightReference, VerticalOrigin, PolylineGlowMaterialProperty } from 'cesium';
 
 export interface CyberEntityOptions {
   id: string;
@@ -50,7 +50,7 @@ export class CyberverseLayers {
       position: Cartesian3.fromDegrees(position.lng, position.lat, position.altitude || 0),
       billboard: {
         image: this.pinBuilder.fromText(icon, color, 48).toDataURL(),
-        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+        verticalOrigin: VerticalOrigin.BOTTOM,
         heightReference: HeightReference.CLAMP_TO_GROUND,
         scale: 1.0,
         show: true,
@@ -61,7 +61,7 @@ export class CyberverseLayers {
         style: LabelStyle.FILL_AND_OUTLINE,
         outlineWidth: 2,
         outlineColor: Color.BLACK,
-        pixelOffset: new Cesium.Cartesian2(0, -40),
+        pixelOffset: new Cartesian2(0, -40),
         heightReference: HeightReference.CLAMP_TO_GROUND,
         show: true,
       },
@@ -90,7 +90,7 @@ export class CyberverseLayers {
           Cartesian3.fromDegrees(destination.lng, destination.lat, 100000),
         ],
         width: 3,
-        material: new Cesium.PolylineGlowMaterialProperty({
+        material: new PolylineGlowMaterialProperty({
           glowPower: 0.2,
           color: color.withAlpha(0.8),
         }),
@@ -181,7 +181,7 @@ export class CyberverseLayers {
   flyToEntity(id: string): void {
     const entity = this.entities.get(id);
     if (entity) {
-      this.viewer.camera.flyTo(entity);
+      this.viewer.flyTo(entity);
     }
   }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Trophy, Calendar, Users, Clock, Flag, Star, ChevronLeft, ChevronRight, Lock, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
@@ -49,14 +49,10 @@ export default function TournamentsPage() {
   const [total, setTotal] = useState(0);
   const pageSize = 12;
 
-  useEffect(() => {
-    fetchTournaments();
-  }, [activeTab, page]);
-
-  async function fetchTournaments() {
+  const fetchTournaments = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get<TournamentsResponse>('/game/tournaments', {
+      const res = await api.get<{ data: TournamentsResponse }>('/game/tournaments', {
         params: { status: activeTab === 'all' ? undefined : activeTab, page, pageSize },
       });
       setTournaments(res.data.tournaments);
@@ -67,7 +63,11 @@ export default function TournamentsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [activeTab, page]);
+
+  useEffect(() => {
+    fetchTournaments();
+  }, [fetchTournaments]);
 
   function formatDate(dateStr: string) {
     return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });

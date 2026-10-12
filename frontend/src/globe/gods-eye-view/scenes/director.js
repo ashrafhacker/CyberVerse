@@ -1192,24 +1192,24 @@ export class SceneDirector {
 
   /** Give opt-in media layers a transient, cancellable shot owner. */
   _setSceneMediaPlayback(scene = null, shot = null, token = null) {
-    for (const module of this._sceneMediaModules || [])
-      module.setSceneMediaPlayback();
+    for (const layerModule of this._sceneMediaModules || [])
+      layerModule.setSceneMediaPlayback();
     this._sceneMediaModules = new Set();
     if (!scene || !shot || !token || token.cancelled || token.signal?.aborted)
       return;
     for (const [id, state] of Object.entries(shot.layers || {})) {
-      const module = this.dataManager?.layers?.get(id)?.module;
+      const layerModule = this.dataManager?.layers?.get(id)?.module;
       if (
         !state?.enabled ||
-        typeof module?.setSceneMediaPlayback !== 'function'
+        typeof layerModule?.setSceneMediaPlayback !== 'function'
       )
         continue;
-      module.setSceneMediaPlayback({
+      layerModule.setSceneMediaPlayback({
         sceneId: scene.id,
         shotId: shot.id,
         token,
       });
-      this._sceneMediaModules.add(module);
+      this._sceneMediaModules.add(layerModule);
     }
   }
 
@@ -2306,10 +2306,14 @@ export class SceneDirector {
     const readers = Object.entries(
       this._layerStatesForShot(scene, shot),
     ).flatMap(([id, state]) => {
-      const module = this.dataManager?.layers?.get(id)?.module;
-      if (!state.enabled || typeof module?.getSceneShotMediaHold !== 'function')
+      const layerModule = this.dataManager?.layers?.get(id)?.module;
+      if (
+        !state.enabled ||
+        typeof layerModule?.getSceneShotMediaHold !== 'function'
+      )
         return [];
-      const read = () => module.getSceneShotMediaHold(state.params?.beatId);
+      const read = () =>
+        layerModule.getSceneShotMediaHold(state.params?.beatId);
       const initial = read();
       return initial
         ? [

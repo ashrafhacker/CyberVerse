@@ -15,7 +15,11 @@ export interface GlobeControls {
   onEntityClick: (callback: (entity: any) => void) => () => void;
 }
 
-export function useGlobe(): { controls: GlobeControls | null; ready: boolean } {
+export function useGlobe(): {
+  controls: GlobeControls | null;
+  ready: boolean;
+  registerComponents: (components: any) => void;
+} {
   const viewerRef = useRef<any>(null);
   const sceneRef = useRef<any>(null);
   const controlsRef = useRef<any>(null);

@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 from typing import List
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, Enum as SQLEnum, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON, String, Text, Enum as SQLEnum, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -157,7 +157,11 @@ class GameChallenge(Base):
     status: Mapped[str] = mapped_column(SQLEnum(ChallengeStatus), default=ChallengeStatus.DRAFT.value, nullable=False)
     is_published: Mapped[bool] = mapped_column(default=False, nullable=False)
     flag_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    hints: Mapped[List[str]] = mapped_column(ARRAY(String), default=list, nullable=False)
+    hints: Mapped[List[str]] = mapped_column(
+        JSON().with_variant(ARRAY(String), "postgresql"),
+        default=list,
+        nullable=False,
+    )
     environment_config: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
 
     author_id: Mapped[PGUUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

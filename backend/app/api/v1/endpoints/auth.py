@@ -141,53 +141,17 @@ async def google_login(
     fastapi_request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    import base64
-    import json
-    import time
-
     import httpx
     import structlog
 
     log = structlog.get_logger("auth.google")
 
-    def _decode_jwt_payload(token: str) -> dict | None:
-        """Offline fallback: decode JWT payload without signature verification (dev/isolated env)."""
-        try:
-            parts = token.split(".")
-            if len(parts) != 3:
-                return None
-            payload_b64 = parts[1] + "=" * (-len(parts[1]) % 4)
-            payload_json = base64.urlsafe_b64decode(payload_b64).decode("utf-8")
-            return json.loads(payload_json)
-        except Exception:
-            return None
-
-    def _validate_offline_payload(payload: dict) -> tuple[str, str, str | None]:
-        now = int(time.time())
-        exp = payload.get("exp")
-        if exp and int(exp) < now:
-            raise HTTPException(status_code=400, detail="Google token expired — please sign in again")
-        aud = payload.get("aud")
-        # Use configured client id; if not set, accept the known CyberVerse client as fallback
-        expected_aud = settings.GOOGLE_CLIENT_ID or "629472594859-dc64tio5cvcfq8g8f41igr1peu8mr2d6.apps.googleusercontent.com"
-        if aud and aud != expected_aud:
-            # In dev we warn but allow to avoid hard failure when Google rotates client config
-            log.warning("google.aud_mismatch", expected=expected_aud, got=aud, mode="offline_fallback")
-            # Only enforce strictly in production
-            if settings.ENVIRONMENT == "production":
-                raise HTTPException(status_code=400, detail="Invalid Google Client ID mismatch")
-        email = payload.get("email")
-        if not email:
-            raise HTTPException(status_code=400, detail="Google token missing email")
-        # email_verified optional check
-        if payload.get("email_verified") is False:
-            raise HTTPException(status_code=400, detail="Google email not verified")
-        full_name = payload.get("name") or payload.get("given_name") or "Google User"
-        avatar_url = payload.get("picture")
-        return email, full_name, avatar_url
-
-    # 1. Try official tokeninfo endpoint (authoritative)
+    # 1. Verify the ID token against Google's authoritative tokeninfo endpoint.
+    #    Signature-less "offline" decoding is deliberately NOT used: it trusts the
+    #    attacker-controlled payload and would allow forging any account whenever
+    #    Google is unreachable, so we fail closed instead.
     data: dict | None = None
+    network_failed = False
     try:
         async with httpx.AsyncClient(timeout=5) as client:
             resp = await client.get(f"https://oauth2.googleapis.com/tokeninfo?id_token={request.credential}")
@@ -197,26 +161,24 @@ async def google_login(
             else:
                 log.warning("google.tokeninfo.invalid", status=resp.status_code, body=resp.text[:500])
     except Exception as exc:  # noqa: BLE001 — network failure (WinError 1225, timeout, DNS)
-        log.warning("google.tokeninfo.network_failed", error=str(exc), fallback="offline_decode")
+        network_failed = True
+        log.warning("google.tokeninfo.network_failed", error=str(exc))
 
-    # 2. Fallback to offline decode if network failed or non-200
     if data is None:
-        payload = _decode_jwt_payload(request.credential)
-        if payload is None:
-            log.error("google.decode.failed", hint="token not JWT or malformed")
-            raise HTTPException(status_code=400, detail="Invalid Google token — unable to decode")
-        log.info("google.offline_fallback.used", aud=payload.get("aud"), email=payload.get("email"))
-        email, full_name, avatar_url = _validate_offline_payload(payload)
-    else:
-        # Validate tokeninfo response
-        expected_aud = settings.GOOGLE_CLIENT_ID or "629472594859-dc64tio5cvcfq8g8f41igr1peu8mr2d6.apps.googleusercontent.com"
-        if data.get("aud") != expected_aud and settings.ENVIRONMENT == "production":
-            raise HTTPException(status_code=400, detail="Invalid Google Client ID mismatch")
-        email = data.get("email")
-        full_name = data.get("name", "Google User")
-        avatar_url = data.get("picture")
-        if not email:
-            raise HTTPException(status_code=400, detail="Google token missing email")
+        if network_failed:
+            raise HTTPException(status_code=503, detail="Google sign-in is temporarily unavailable — please try again")
+        raise HTTPException(status_code=400, detail="Invalid Google token")
+
+    expected_aud = settings.GOOGLE_CLIENT_ID or "629472594859-dc64tio5cvcfq8g8f41igr1peu8mr2d6.apps.googleusercontent.com"
+    if data.get("aud") != expected_aud:
+        raise HTTPException(status_code=400, detail="Invalid Google Client ID mismatch")
+    email = data.get("email")
+    full_name = data.get("name", "Google User")
+    avatar_url = data.get("picture")
+    if not email:
+        raise HTTPException(status_code=400, detail="Google token missing email")
+    if data.get("email_verified") is False:
+        raise HTTPException(status_code=400, detail="Google email not verified")
 
     try:
         result = await AuthService.google_login(db, email, full_name, avatar_url, _request_meta(fastapi_request))

@@ -119,8 +119,9 @@ async def submit_quiz(
             {
                 "question_id": qid,
                 "correct": correct,
-                "correct_answer": q.correct_answer,
-                "explanation": q.explanation,
+                # Never echo the answer key or explanation back to the client:
+                # it lets a user harvest every answer and guarantees a 100% pass.
+                "points": q.points if correct else 0,
             }
         )
 

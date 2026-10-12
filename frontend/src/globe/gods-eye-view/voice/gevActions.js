@@ -1168,8 +1168,9 @@ function selectedCockpitTarget(dataManager) {
   const selected = getSelectedEntityContext({ dataManager });
   if (!selected || !['flights', 'military'].includes(selected.layerId))
     return null;
-  const module = dataManager?.layers?.get(selected.layerId)?.module;
-  if (!module?.trackById || typeof module.trackById !== 'function') return null;
+  const layerModule = dataManager?.layers?.get(selected.layerId)?.module;
+  if (!layerModule?.trackById || typeof layerModule.trackById !== 'function')
+    return null;
   const id = String(selected.id || '').trim();
   return id ? { layerId: selected.layerId, id } : null;
 }
@@ -2153,9 +2154,13 @@ async function trackEntity(viewer, dataManager, styleManager, args = {}) {
       skippedDisabled.push(family.layerId);
       continue;
     }
-    const module = dataManager.layers.get(family.layerId)?.module;
-    if (!module || typeof module.findByQuery !== 'function') continue;
-    const found = module.findByQuery(query);
+    const layerModule = dataManager.layers.get(family.layerId)?.module;
+    if (
+      !layerModule ||
+      typeof layerModule.findByQuery !== 'function'
+    )
+      continue;
+    const found = layerModule.findByQuery(query);
     if (!found) continue;
 
     if (
@@ -2229,24 +2234,24 @@ function stopAllTracking(viewer, dataManager) {
   const released = [];
   const failed = new Set();
   for (const family of TRACKABLE_FAMILIES) {
-    const module = dataManager.layers.get(family.layerId)?.module;
-    if (!module) continue;
+    const layerModule = dataManager.layers.get(family.layerId)?.module;
+    if (!layerModule) continue;
     try {
       if (family.kind === 'vessel') {
-        if (module.getSelectedInfo?.()) {
+        if (layerModule.getSelectedInfo?.()) {
           if (
-            typeof module.clearSelection !== 'function' ||
-            module.clearSelection() === false
+            typeof layerModule.clearSelection !== 'function' ||
+            layerModule.clearSelection() === false
           ) {
             failed.add(family.layerId);
           } else {
             released.push(family.layerId);
           }
         }
-      } else if (module.getTrackedInfo?.()) {
+      } else if (layerModule.getTrackedInfo?.()) {
         if (
-          typeof module.stopTracking !== 'function' ||
-          module.stopTracking({ origin: 'voice' }) === false
+          typeof layerModule.stopTracking !== 'function' ||
+          layerModule.stopTracking({ origin: 'voice' }) === false
         ) {
           failed.add(family.layerId);
         } else {
@@ -2316,7 +2321,7 @@ async function frameOverhead(viewer, dataManager, styleManager, args = {}) {
       error: `The ${layerId} layer is not enabled`,
     };
   }
-  const module = dataManager.layers.get(layerId)?.module;
+  const layerModule = dataManager.layers.get(layerId)?.module;
   const isSatellites = layerId === 'satellites';
   const defaultRadiusKm = isSatellites
     ? 3000
@@ -2327,10 +2332,10 @@ async function frameOverhead(viewer, dataManager, styleManager, args = {}) {
   const center = getViewTargetCartesian(viewer) || viewer.camera.positionWC;
 
   let entries = [];
-  if (typeof module.getNearby === 'function') {
-    entries = module.getNearby(center, radiusKm * 1000, 80) || [];
-  } else if (typeof module.getAllPositions === 'function') {
-    entries = (module.getAllPositions(800) || [])
+  if (typeof layerModule.getNearby === 'function') {
+    entries = layerModule.getNearby(center, radiusKm * 1000, 80) || [];
+  } else if (typeof layerModule.getAllPositions === 'function') {
+    entries = (layerModule.getAllPositions(800) || [])
       .filter((entry) => entry.position)
       .map((entry) => ({
         ...entry,
@@ -2427,13 +2432,13 @@ function runManagedVoiceNavigation(
 function collectTrackedEntities(dataManager) {
   const tracked = [];
   for (const family of TRACKABLE_FAMILIES) {
-    const module = dataManager.layers.get(family.layerId)?.module;
-    if (!module) continue;
+    const layerModule = dataManager.layers.get(family.layerId)?.module;
+    if (!layerModule) continue;
     try {
       const info =
         family.kind === 'vessel'
-          ? module.getSelectedInfo?.()
-          : module.getTrackedInfo?.();
+          ? layerModule.getSelectedInfo?.()
+          : layerModule.getTrackedInfo?.();
       if (info)
         tracked.push({ kind: family.kind, layerId: family.layerId, ...info });
     } catch {
@@ -4248,18 +4253,18 @@ function analystProviders(
     getLayerSnapshot(layerKey) {
       const row = dataManager.getAll?.().find((layer) => layer.id === layerKey);
       if (row) return layerSnapshot(row);
-      const module = dataManager.layers?.get(layerKey)?.module;
+      const layerModule = dataManager.layers?.get(layerKey)?.module;
       return layerSnapshot({
         id: layerKey,
         enabled: dataManager.isEnabled?.(layerKey),
-        stats: module?.getStats?.() || {},
+        stats: layerModule?.getStats?.() || {},
       });
     },
     getRecordCoverage(layerKey, rows) {
       if (!['satellites', 'local-datacenters', 'local-dams'].includes(layerKey))
         return null;
-      const module = dataManager.layers.get(layerKey)?.module;
-      const loaded = module?.getStats?.().count;
+      const layerModule = dataManager.layers.get(layerKey)?.module;
+      const loaded = layerModule?.getStats?.().count;
       return {
         basis: 'bounded-loaded-records',
         recordsExamined: rows.length,

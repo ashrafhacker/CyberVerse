@@ -93,7 +93,7 @@ export function useCesium() {
  * Optimized Cesium Viewer creation with performance settings
  */
 export function createOptimizedViewer(container: HTMLDivElement, creditContainer: HTMLElement) {
-  return async function(cesium: typeof import('cesium')): Promise<cesium.Viewer> {
+  return async function(cesium: typeof import('cesium')): Promise<import('cesium').Viewer> {
     const viewer = new cesium.Viewer(container, {
       timeline: false,
       animation: false,
@@ -126,10 +126,13 @@ export function createOptimizedViewer(container: HTMLDivElement, creditContainer
     // Performance optimizations
     viewer.targetFrameRate = 60;
     viewer.scene.globe.show = false;
-    viewer.scene.skyAtmosphere.show = true;
-    viewer.scene.skyAtmosphere.atmosphereLightIntensity = 18;
-    viewer.scene.skyAtmosphere.saturationShift = -0.12;
-    viewer.scene.skyAtmosphere.brightnessShift = -0.08;
+    const skyAtmosphere = viewer.scene.skyAtmosphere;
+    if (skyAtmosphere) {
+      skyAtmosphere.show = true;
+      skyAtmosphere.atmosphereLightIntensity = 18;
+      skyAtmosphere.saturationShift = -0.12;
+      skyAtmosphere.brightnessShift = -0.08;
+    }
     
     // Disable depth test against terrain for better performance
     viewer.scene.globe.depthTestAgainstTerrain = false;
@@ -138,7 +141,7 @@ export function createOptimizedViewer(container: HTMLDivElement, creditContainer
     viewer.scene.globe.enableLighting = false;
     
     // Reduce logo fade time
-    viewer.cesiumWidget.creditContainer.style.display = 'none';
+    (viewer.cesiumWidget.creditContainer as HTMLElement).style.display = 'none';
     
     return viewer;
   };

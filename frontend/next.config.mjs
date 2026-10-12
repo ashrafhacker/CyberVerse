@@ -28,6 +28,43 @@ const nextConfig = {
       },
     ];
   },
+  async headers() {
+    const isProd = process.env.NODE_ENV === 'production';
+    const csp = [
+      "default-src 'self'",
+      // 'unsafe-inline' for scripts is required by Next.js' inline hydration/data
+      // payloads; everything else is pinned to 'self' so no third-party script
+      // can be pulled in by an injected tag.
+      "script-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: https:",
+      "font-src 'self' data:",
+      "connect-src 'self' https: wss:",
+      "media-src 'self' https:",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'none'",
+      ...(isProd ? ['upgrade-insecure-requests'] : []),
+    ].join('; ');
+
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'Content-Security-Policy', value: csp },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=()' },
+          { key: 'X-DNS-Prefetch-Control', value: 'off' },
+          ...(isProd
+            ? [{ key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains; preload' }]
+            : []),
+        ],
+      },
+    ];
+  },
   images: {
     formats: ['image/avif', 'image/webp'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],

@@ -307,7 +307,7 @@ export default function RealTimeLabPage() {
                       </li>
                     ))}
                   </ol>
-                  {(analysis.safety_metadata as Record<string, unknown>)?.fictional_only && (
+                  {((analysis.safety_metadata as Record<string, unknown>)?.fictional_only === true) && (
                     <p className="mt-3 text-[10px] text-cyber-muted italic">
                       Simulation data only — guidance applies to this fictional sandbox.
                     </p>

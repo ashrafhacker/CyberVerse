@@ -45,9 +45,9 @@ export class LayerPresentation {
         setLayerParams: (id, params, options) =>
           this.manager.setLayerParams(id, params, options),
         getRowControls: (id) => {
-          const module = this.manager.layers.get(id)?.module;
+          const layerModule = this.manager.layers.get(id)?.module;
           try {
-            return module?.getRowControls?.() || null;
+            return layerModule?.getRowControls?.() || null;
           } catch (error) {
             console.warn(`[Data] ${id} getRowControls error:`, error);
             return null;
@@ -57,9 +57,9 @@ export class LayerPresentation {
           typeof this.manager.layers.get(id)?.module?.getRowControls ===
           'function',
         subscribeRowControls: (id, listener) => {
-          const module = this.manager.layers.get(id)?.module;
-          module?.setRowControlsListener?.(listener);
-          return () => module?.setRowControlsListener?.(null);
+          const layerModule = this.manager.layers.get(id)?.module;
+          layerModule?.setRowControlsListener?.(listener);
+          return () => layerModule?.setRowControlsListener?.(null);
         },
         onHiddenRefresh: () => {
           this.pendingVisible = true;

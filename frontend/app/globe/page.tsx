@@ -1,6 +1,6 @@
 'use client';
 
-import { CyberverseGlobePage } from '@/globe/CyberverseGlobePage';
+import { CyberverseGlobePage } from '@/src/globe/CyberverseGlobePage';
 
 export default function GlobePage() {
   return <CyberverseGlobePage />;
