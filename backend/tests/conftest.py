@@ -67,24 +67,40 @@ async def db_session(db_engine):
 
 
 
-# Clear Redis state in tests to prevent cross-test rate limit interference
-from app.core.redis import RedisClient
+# Key prefixes this application writes to Redis (rate limiting, CTF submit
+# throttle, AI response cache). Test cleanup is deliberately scoped to these
+# prefixes so a shared or long-lived Redis database is never wiped.
+_TEST_REDIS_PREFIXES = ("ratelimit:*", "ctf:submit:*", "ai:*")
 
 
 @pytest_asyncio.fixture(autouse=True)
 async def clear_redis():
-    """Clear Redis keys before each test to ensure test isolation."""
+    """Delete only app-created test keys before and after each test.
+
+    This intentionally does NOT use FLUSHDB: flushing would empty the entire
+    configured Redis database, which is destructive when REDIS_URL points at
+    a shared instance. Each phase opens a short-lived connection because
+    RedisClient caches a single client bound to the first test's event loop.
+    """
+    import redis.asyncio as aioredis
+
+    async def _wipe() -> None:
+        client = aioredis.from_url(get_settings().REDIS_URL)
+        try:
+            for prefix in _TEST_REDIS_PREFIXES:
+                async for key in client.scan_iter(match=prefix):
+                    await client.delete(key)
+        finally:
+            await client.aclose()
+
     try:
-        client = await RedisClient.get_client()
-        # Only clear keys in test database
-        await client.flushdb()
+        await _wipe()
     except Exception:
-        # If Redis is unavailable, continue (tests should handle gracefully)
+        # Redis unavailable: nothing to clear; tests handle absence gracefully.
         pass
     yield
     try:
-        client = await RedisClient.get_client()
-        await client.flushdb()
+        await _wipe()
     except Exception:
         pass
 
