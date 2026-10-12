@@ -156,6 +156,8 @@ jobs:
     needs: [backend-lint, frontend-lint]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
