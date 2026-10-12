@@ -11,6 +11,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-0123456789abcdef0123456789a
 os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-0123456789abcdef0123456789abc")
 os.environ.setdefault("ENVIRONMENT", "testing")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/15")
+os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
 
 # Clear settings cache to pick up test env vars
 from app.core.config import get_settings
@@ -63,6 +64,29 @@ async def db_session(db_engine):
     factory = async_sessionmaker(db_engine, expire_on_commit=False)
     async with factory() as session:
         yield session
+
+
+
+# Clear Redis state in tests to prevent cross-test rate limit interference
+from app.core.redis import RedisClient
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def clear_redis():
+    """Clear Redis keys before each test to ensure test isolation."""
+    try:
+        client = await RedisClient.get_client()
+        # Only clear keys in test database
+        await client.flushdb()
+    except Exception:
+        # If Redis is unavailable, continue (tests should handle gracefully)
+        pass
+    yield
+    try:
+        client = await RedisClient.get_client()
+        await client.flushdb()
+    except Exception:
+        pass
 
 
 @pytest_asyncio.fixture

@@ -37,7 +37,7 @@ async def test_register_duplicate_email_rejected(client):
 
 
 async def test_login_success(client):
-    await client.post(
+    registered = await client.post(
         "/api/v1/auth/register",
         json={
             "email": "carol@test.io",
@@ -47,6 +47,7 @@ async def test_login_success(client):
             "username": "carol_test",
         },
     )
+    assert registered.status_code == 201, registered.text
     response = await client.post(
         "/api/v1/auth/login",
         json={"email": "carol@test.io", "password": "StrongPass123!"},
@@ -56,7 +57,7 @@ async def test_login_success(client):
 
 
 async def test_login_wrong_password_rejected(client):
-    await client.post(
+    registered = await client.post(
         "/api/v1/auth/register",
         json={
             "email": "dave@test.io",
@@ -66,6 +67,7 @@ async def test_login_wrong_password_rejected(client):
             "username": "dave_test",
         },
     )
+    assert registered.status_code == 201, registered.text
     response = await client.post(
         "/api/v1/auth/login",
         json={"email": "dave@test.io", "password": "WrongPass123!"},
@@ -89,6 +91,7 @@ async def test_me_with_token(client):
             "username": "erin_test",
         },
     )
+    assert register.status_code == 201, register.text
     token = register.json()["data"]["access_token"]
 
     response = await client.get(
@@ -109,6 +112,7 @@ async def test_refresh_token_flow(client):
             "username": "frank_test",
         },
     )
+    assert register.status_code == 201, register.text
     refresh_token = register.json()["data"]["refresh_token"]
 
     response = await client.post(
@@ -129,6 +133,7 @@ async def test_logout_revokes_session(client):
             "username": "grace_test",
         },
     )
+    assert register.status_code == 201, register.text
     token = register.json()["data"]["access_token"]
     refresh_token = register.json()["data"]["refresh_token"]
     headers = {"Authorization": f"Bearer {token}"}

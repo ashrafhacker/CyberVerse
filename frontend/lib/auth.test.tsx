@@ -57,7 +57,10 @@ describe('useAuth', () => {
     const { result } = renderHook(() => useAuth(), { wrapper });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(apiMock.api.get).toHaveBeenCalledWith('/auth/me');
+    expect(apiMock.api.get).toHaveBeenCalledWith(
+      '/auth/me',
+      expect.objectContaining({ cache: 'swr' }),
+    );
     expect(result.current.user).toEqual(TEST_USER);
   });
 

@@ -36,27 +36,6 @@ export function useCyberverseLayers() {
     }
   }, [ready, controls]);
 
-  const toggleLayer = useCallback(async (layer: keyof LayerState, enabled?: boolean) => {
-    const newState = enabled ?? !layerState[layer];
-    setLayerState(prev => ({ ...prev, [layer]: newState }));
-
-    if (!layersRef.current) return;
-
-    if (newState) {
-      setLoading(prev => ({ ...prev, [layer]: true }));
-      try {
-        await loadLayerData(layer);
-      } catch (error) {
-        console.error(`Failed to load ${layer}:`, error);
-        setLayerState(prev => ({ ...prev, [layer]: false }));
-      } finally {
-        setLoading(prev => ({ ...prev, [layer]: false }));
-      }
-    } else {
-      clearLayerData(layer);
-    }
-  }, [layerState]);
-
   const loadLayerData = useCallback(async (layer: keyof LayerState) => {
     if (!layersRef.current) return;
 
@@ -200,6 +179,27 @@ export function useCyberverseLayers() {
       }
     });
   }, []);
+
+  const toggleLayer = useCallback(async (layer: keyof LayerState, enabled?: boolean) => {
+    const newState = enabled ?? !layerState[layer];
+    setLayerState(prev => ({ ...prev, [layer]: newState }));
+
+    if (!layersRef.current) return;
+
+    if (newState) {
+      setLoading(prev => ({ ...prev, [layer]: true }));
+      try {
+        await loadLayerData(layer);
+      } catch (error) {
+        console.error(`Failed to load ${layer}:`, error);
+        setLayerState(prev => ({ ...prev, [layer]: false }));
+      } finally {
+        setLoading(prev => ({ ...prev, [layer]: false }));
+      }
+    } else {
+      clearLayerData(layer);
+    }
+  }, [layerState, loadLayerData, clearLayerData]);
 
   const loadNetworkTopology = useCallback(async (labId: string) => {
     if (!layersRef.current) return;

@@ -98,9 +98,9 @@ export function createPolicyHelpers({
   function releaseAircraftTracking(dataManager) {
     let released = 0;
     for (const layerId of ['flights', 'military']) {
-      const module = dataManager?.layers?.get(layerId)?.module;
-      if (typeof module?.stopTracking !== 'function') continue;
-      module.stopTracking();
+      const layerModule = dataManager?.layers?.get(layerId)?.module;
+      if (typeof layerModule?.stopTracking !== 'function') continue;
+      layerModule.stopTracking();
       released++;
     }
     return released;

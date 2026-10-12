@@ -4,7 +4,14 @@ import { createApplicationCatalog } from '../app/constructCatalog.js';
 import { createStandaloneLayerSources } from './layerSources.js';
 export { createStandaloneReferenceSources } from './layerSources.js';
 
-/** Create fresh layer instances using the existing standalone source choices. */
+/**
+ * Create fresh layer instances using the existing standalone source choices.
+ *
+ * @param {object} [options]
+ * @param {any} [options.nepalBoundaryResolver]
+ * @param {AbortSignal} [options.signal]
+ * @param {any} [options.surface]
+ */
 export function createStandaloneCatalog({
   nepalBoundaryResolver,
   signal = new AbortController().signal,

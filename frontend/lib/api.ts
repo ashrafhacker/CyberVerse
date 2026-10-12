@@ -211,8 +211,7 @@ async function refreshAccessToken(): Promise<string | null> {
       clearTokens();
       return null;
     } finally {
-      // microtask delay to allow concurrent waiters to reuse same promise
-      setTimeout(() => { refreshPromise = null; }, 50);
+      refreshPromise = null;
     }
   })();
 
@@ -453,7 +452,9 @@ export async function apiRequest<T = unknown>(rawPath: string, options: RequestO
   const promise = exec();
   if (method === 'GET') {
     inflight.set(dKey, promise);
-    promise.finally(() => inflight.delete(dKey));
+    // Detach from the in-flight map without turning the caller's rejection into
+    // an unhandled one (a bare .finally() rethrows on the derived chain).
+    promise.catch(() => {}).finally(() => inflight.delete(dKey));
   }
   return promise;
 }

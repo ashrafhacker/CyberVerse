@@ -77,12 +77,12 @@ export function GlobeViewerClient({
           googleTileset: tileset,
           cesiumToken,
           initialStack: tileset ? 'photoreal' : 'esri-imagery',
-          onChange: (state) => {
+          onChange: (state: unknown) => {
             window.dispatchEvent(
               new CustomEvent('gev:map-stack-changed', { detail: state }),
             );
           },
-          onError: (message) => console.warn('[MapStack]', message),
+          onError: (message: unknown) => console.warn('[MapStack]', message),
         });
 
         await mapStackController.setStack(tileset ? 'photoreal' : 'esri-imagery', { silent: true });
@@ -93,6 +93,7 @@ export function GlobeViewerClient({
         const operations = createApplicationOperations({
           requests: createApplicationRequestServices(),
           signal: { throwIfAborted: () => {}, aborted: false } as any,
+          eventTarget: window,
         });
 
         // Initialize catalog and controls
@@ -108,7 +109,7 @@ export function GlobeViewerClient({
         });
 
         const catalog = createStandaloneCatalog({
-          nepalBoundaryResolver: (signal) =>
+          nepalBoundaryResolver: (signal: any) =>
             operations.annotationResolver.resolveRegionRingForQuery(
               'Nepal',
               signal,
@@ -135,8 +136,11 @@ export function GlobeViewerClient({
         }
 
         if (initialLayers.length > 0 && controls) {
+          const layerControls = controls as unknown as {
+            toggleLayer?: (layerId: string, enabled?: boolean) => void;
+          };
           initialLayers.forEach((layer) => {
-            controls.toggleLayer?.(layer, true);
+            layerControls.toggleLayer?.(layer, true);
           });
         }
       } catch (err) {

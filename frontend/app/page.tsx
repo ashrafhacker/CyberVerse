@@ -184,7 +184,7 @@ export default function Home() {
           <motion.div suppressHydrationWarning variants={containerVariants} initial="hidden" animate="visible" className="relative mx-auto max-w-5xl px-6 text-center">
             <motion.p variants={itemVariants} className="mb-4 inline-flex items-center gap-2 rounded-full border border-cyber-primary/30 bg-cyber-primary/10 px-3 py-1 font-mono text-xs text-cyber-primary">
               <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-              {'>'} // educational cybersecurity simulation platform — v2.1 PRO
+              {'>'} {/* educational cybersecurity simulation platform — v2.1 PRO */}
             </motion.p>
 
             <motion.h1 variants={itemVariants} className="mb-6 text-5xl font-extrabold tracking-tight md:text-7xl">
@@ -324,7 +324,7 @@ export default function Home() {
         <section className="mx-auto max-w-5xl px-6 pb-20">
           <div className="rounded-2xl border border-cyber-primary/30 bg-gradient-to-br from-cyber-primary/10 via-violet-500/10 to-cyan-500/10 p-8 text-center md:p-12">
             <h2 className="text-3xl font-bold md:text-4xl">Ready to enter the Verse?</h2>
-            <p className="mx-auto mt-3 max-w-2xl text-cyber-muted">Join 50K+ learners securing the future. Start free, upgrade when you're ready for advanced tooling.</p>
+            <p className="mx-auto mt-3 max-w-2xl text-cyber-muted">Join 50K+ learners securing the future. Start free, upgrade when you&apos;re ready for advanced tooling.</p>
             <div className="mt-6 flex justify-center gap-3">
               <Link href="/register" className="terminal-button px-8 py-3 inline-flex items-center gap-2">Create free account <Award className="h-5 w-5" /></Link>
               <Link href="/courses" className="terminal-button-ghost px-6 py-3">Browse courses</Link>

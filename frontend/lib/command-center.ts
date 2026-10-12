@@ -520,9 +520,9 @@ export function flattenLessons(structure: CourseStructure): Array<{
     moduleName: string;
     lesson: CourseStructure['modules'][number]['lessons'][number];
   }> = [];
-  for (const module of [...(structure.modules ?? [])].sort((a, b) => a.order - b.order)) {
-    const lessons = [...(module.lessons ?? [])].sort((a, b) => a.order - b.order);
-    for (const lesson of lessons) flat.push({ moduleName: module.name, lesson });
+  for (const courseModule of [...(structure.modules ?? [])].sort((a, b) => a.order - b.order)) {
+    const lessons = [...(courseModule.lessons ?? [])].sort((a, b) => a.order - b.order);
+    for (const lesson of lessons) flat.push({ moduleName: courseModule.name, lesson });
   }
   return flat;
 }

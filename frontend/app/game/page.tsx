@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Globe, Trophy, Flag, Users, Zap, Lock, Brain, Target, ChevronRight } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Globe, Trophy, Flag, Users, Zap, Lock, Brain, Target, ChevronRight, Star } from 'lucide-react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 
@@ -56,14 +56,10 @@ export default function GamePage() {
   const [loading, setLoading] = useState(true);
   const [selectedChallenge, setSelectedChallenge] = useState<GameChallenge | null>(null);
 
-  useEffect(() => {
-    fetchChallenges();
-  }, [activeCategory]);
-
-  async function fetchChallenges() {
+  const fetchChallenges = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get<ChallengesResponse>('/game/challenges', {
+      const res = await api.get<{ data: ChallengesResponse }>('/game/challenges', {
         params: { category: activeCategory === 'all' ? undefined : activeCategory, published: true },
       });
       setChallenges(res.data.challenges);
@@ -72,7 +68,11 @@ export default function GamePage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [activeCategory]);
+
+  useEffect(() => {
+    fetchChallenges();
+  }, [fetchChallenges]);
 
   function getDifficultyClass(difficulty: string) {
     return DIFFICULTY_COLORS[difficulty as keyof typeof DIFFICULTY_COLORS] || 'bg-cyber-border text-cyber-muted';
@@ -275,7 +275,7 @@ export default function GamePage() {
             className="inline-flex items-center gap-2 rounded-lg border border-cyber-primary bg-cyber-primary/10 px-6 py-3 font-medium text-cyber-primary hover:bg-cyber-primary/20 transition-all"
           >
             <Zap className="h-5 w-5" />
-            Start with "Getting Started"
+            Start with &quot;Getting Started&quot;
           </Link>
         </div>
       </div>
