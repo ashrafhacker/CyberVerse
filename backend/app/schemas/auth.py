@@ -28,6 +28,7 @@ class AuthProvider(str, Enum):
     EMAIL = "email"
     GOOGLE = "google"
     GITHUB = "github"
+    CLERK = "clerk"
 
 
 class RegisterRequest(BaseModel):

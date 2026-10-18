@@ -72,10 +72,15 @@ async def _fetch_jwks(force: bool = False) -> None:
     if not force and _jwks_cache and (time.monotonic() - _jwks_fetched_at) < _JWKS_CACHE_TTL_SECONDS:
         return
     url = f"{clerk_frontend_api()}{_JWKS_URL_PATH}"
-    async with httpx.AsyncClient(timeout=_JWKS_FETCH_TIMEOUT_SECONDS) as client:
-        resp = await client.get(url)
-        resp.raise_for_status()
-        data = resp.json()
+    try:
+        async with httpx.AsyncClient(timeout=_JWKS_FETCH_TIMEOUT_SECONDS) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            data = resp.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        # Surface as ClerkError so callers (auth deps) map it to 401/503
+        # instead of leaking a 500 on a JWKS outage or DNS failure.
+        raise ClerkError(f"Unable to fetch Clerk JWKS: {exc}") from exc
     keys = data.get("keys", [])
     _jwks_cache.clear()
     for jwk in keys:

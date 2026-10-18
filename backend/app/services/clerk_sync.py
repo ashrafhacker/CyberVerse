@@ -91,7 +91,7 @@ async def sync_clerk_user(
         )
         db.add(user)
         await db.flush()
-        db.add(Profile(user_id=user.id, username=username, avatar_url=avatar_url))
+        db.add(Profile(user_id=user.id, username=username))
         db.add(PlayerProgress(user_id=user.id))
     else:
         # Link / update the existing row.
