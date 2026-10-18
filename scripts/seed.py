@@ -234,6 +234,8 @@ async def seed_learning_content(db: AsyncSession) -> None:
 
     lessons = []
     for data in lesson_data:
+        # schema requires short_description NOT NULL; fall back to description
+        data.setdefault("short_description", data.get("description"))
         lesson = Lesson(module_id=module.id, **data)
         db.add(lesson)
         await db.flush()

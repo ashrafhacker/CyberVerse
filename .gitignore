@@ -78,3 +78,6 @@ assets/courses/copy_log.txt
 # manifest.json IS committed (it's the index, not the files themselves)
 !assets/courses/manifest.json
 
+
+# Neon CLI local state (org/project IDs, not needed in repo)
+.neon
