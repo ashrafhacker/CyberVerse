@@ -1,3 +1,8 @@
+import base64
+import hashlib
+import hmac
+import json
+import time
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -494,3 +499,82 @@ async def login_history(
             for e in entries
         ]
     )
+
+
+# ---------------------------------------------------------------------------
+# Clerk webhook — keep local users in sync with Clerk identities
+# ---------------------------------------------------------------------------
+
+_CLERK_WEBHOOK_TOLERANCE_SECONDS = 300  # reject replays older than 5 minutes
+
+
+def _verify_svix_signature(secret: str, svix_id: str, svix_timestamp: str, payload: str, signature_header: str) -> bool:
+    """Verify a svix HMAC-SHA256 signature (stdlib-only, no svix dependency).
+
+    The signed content is ``{svix_id}.{svix_timestamp}.{payload}``. The header
+    may carry one or more space-separated signatures, optionally ``v1,``-prefixed.
+    """
+    try:
+        ts = int(svix_timestamp)
+    except ValueError:
+        return False
+    if abs(time.time() - ts) > _CLERK_WEBHOOK_TOLERANCE_SECONDS:
+        return False
+
+    signed = f"{svix_id}.{svix_timestamp}.{payload}".encode()
+    key = secret.encode()
+    expected = base64.b64encode(hmac.new(key, signed, hashlib.sha256).digest()).decode()
+
+    for part in signature_header.split():
+        candidate = part.split(",", 1)[1] if part.startswith("v1,") else part
+        if hmac.compare_digest(candidate, expected):
+            return True
+    return False
+
+
+@router.post("/clerk/webhook", status_code=status.HTTP_200_OK, summary="Clerk user sync webhook")
+async def clerk_webhook(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.services.clerk_sync import sync_clerk_user
+
+    secret = settings.CLERK_WEBHOOK_SECRET
+    if not secret:
+        raise HTTPException(status_code=503, detail="Clerk webhook not configured")
+
+    body_bytes = await request.body()
+    payload = body_bytes.decode("utf-8")
+    svix_id = request.headers.get("svix-id", "")
+    svix_timestamp = request.headers.get("svix-timestamp", "")
+    signature = request.headers.get("svix-signature", "")
+    if not (svix_id and svix_timestamp and signature):
+        raise HTTPException(status_code=400, detail="Missing svix signature headers")
+    if not _verify_svix_signature(secret.get_secret_value(), svix_id, svix_timestamp, payload, signature):
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
+    try:
+        event = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Malformed JSON payload") from exc
+
+    event_type = event.get("type", "")
+    data = event.get("data") or {}
+    clerk_user_id = data.get("id")
+    if not clerk_user_id:
+        return {"status": "ignored"}
+
+    if event_type in ("user.created", "user.updated"):
+        try:
+            await sync_clerk_user(db, clerk_user_id, clerk_user=data)
+        except ValueError:
+            # e.g. no email yet — ignore rather than 500 so Clerk retries cleanly
+            return {"status": "ignored"}
+    elif event_type == "user.deleted":
+        result = await db.execute(select(User).where(User.provider_id == clerk_user_id))
+        user = result.scalar_one_or_none()
+        if user:
+            from datetime import UTC, datetime
+
+            user.deleted_at = datetime.now(UTC)
+            user.status = UserStatus.BANNED
+            await db.commit()
+
+    return {"status": "ok"}
