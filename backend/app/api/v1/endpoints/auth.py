@@ -521,8 +521,16 @@ def _verify_svix_signature(secret: str, svix_id: str, svix_timestamp: str, paylo
     if abs(time.time() - ts) > _CLERK_WEBHOOK_TOLERANCE_SECONDS:
         return False
 
-    signed = f"{svix_id}.{svix_timestamp}.{payload}".encode()
+    # Svix secrets look like "whsec_<base64>" — the HMAC key is the
+    # base64-DECODED bytes after the prefix, not the raw string.
     key = secret.encode()
+    if secret.startswith("whsec_"):
+        try:
+            key = base64.b64decode(secret[len("whsec_"):])
+        except Exception:  # noqa: BLE001 — malformed secret; fall back to raw
+            key = secret.encode()
+
+    signed = f"{svix_id}.{svix_timestamp}.{payload}".encode()
     expected = base64.b64encode(hmac.new(key, signed, hashlib.sha256).digest()).decode()
 
     for part in signature_header.split():

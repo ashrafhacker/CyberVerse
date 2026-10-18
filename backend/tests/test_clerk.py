@@ -341,16 +341,25 @@ async def test_sync_rejects_clerk_user_without_email(db_session):
 
 
 def _sign(secret: str, svix_id: str, ts: str, payload: str) -> str:
+    """Sign like svix: HMAC key is the base64-decoded bytes after 'whsec_'."""
+    key = secret.encode()
+    if secret.startswith("whsec_"):
+        key = base64.b64decode(secret[len("whsec_"):])
     signed = f"{svix_id}.{ts}.{payload}".encode()
     return base64.b64encode(
-        hmac.new(secret.encode(), signed, hashlib.sha256).digest()
+        hmac.new(key, signed, hashlib.sha256).digest()
     ).decode()
+
+
+def _whsec() -> str:
+    """A realistic svix/Clerk endpoint secret."""
+    return "whsec_" + base64.b64encode(b"0123456789abcdef0123456789abcdef").decode()
 
 
 def test_svix_signature_accepts_valid_signature():
     from app.api.v1.endpoints.auth import _verify_svix_signature
 
-    secret = "whsec_test"
+    secret = _whsec()
     ts = str(int(time.time()))
     payload = json.dumps({"type": "user.created", "data": {"id": "user_1"}})
     sig = _sign(secret, "msg_1", ts, payload)
@@ -363,7 +372,7 @@ def test_svix_signature_accepts_valid_signature():
 def test_svix_signature_rejects_tampering_and_wrong_secret():
     from app.api.v1.endpoints.auth import _verify_svix_signature
 
-    secret = "whsec_test"
+    secret = _whsec()
     ts = str(int(time.time()))
     payload = json.dumps({"type": "user.created", "data": {"id": "user_1"}})
     sig = _sign(secret, "msg_1", ts, payload)
@@ -374,7 +383,7 @@ def test_svix_signature_rejects_tampering_and_wrong_secret():
     )
     # Wrong secret.
     assert not _verify_svix_signature(
-        "whsec_wrong", "msg_1", ts, payload, f"v1,{sig}"
+        _whsec() + "x", "msg_1", ts, payload, f"v1,{sig}"
     )
     # Wrong svix-id.
     assert not _verify_svix_signature(secret, "msg_2", ts, payload, f"v1,{sig}")

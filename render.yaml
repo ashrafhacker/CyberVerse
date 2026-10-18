@@ -21,6 +21,15 @@ services:
         generateValue: true
       - key: JWT_SECRET_KEY
         generateValue: true
+      # Clerk auth. The publishable key derives the instance JWKS URL used to
+      # verify session tokens (RS256). The secret key calls the Clerk Backend
+      # API for lazy user sync; the webhook secret verifies /auth/clerk/webhook.
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_WEBHOOK_SECRET
+        sync: false
       # Neon PostgreSQL (cyberverse database, us-east-1). Use the DIRECT
       # (unpooled) connection string. libpq-only params (sslmode,
       # channel_binding) present in console URLs are remapped for asyncpg
