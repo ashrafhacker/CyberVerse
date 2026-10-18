@@ -158,6 +158,8 @@ jobs:
           context: .
           file: docker/Dockerfile.frontend
           push: true
+          build-args: |
+            NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_c3VpdGVkLXZlcnZldC0zNjYzLmNsZXJrLmFjY291bnRzLmRldiQ
           tags: |
             ghcr.io/${{ steps.image.outputs.repo }}/frontend:latest
             ghcr.io/${{ steps.image.outputs.repo }}/frontend:${{ github.sha }}
