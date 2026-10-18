@@ -376,6 +376,27 @@ class Settings(BaseSettings):
     def database_url_async(self) -> str:
         """ASGI async URL derived from sync URL."""
         url = str(self.DATABASE_URL)
+        # Neon/Supabase console URLs carry libpq-style query params.
+        # SQLAlchemy's asyncpg dialect forwards URL query params as connect
+        # kwargs (see dialect source: opts.update(url.query)), which asyncpg
+        # rejects for libpq-only keys (channel_binding -> TypeError), while
+        # `sslmode` is not a valid kwarg name at all. asyncpg DOES accept
+        # libpq sslmode values through its `ssl` kwarg, and Neon requires
+        # TLS (asyncpg's 'prefer' fallback can land on an unencrypted
+        # connection) — so rename sslmode->ssl and drop channel_binding.
+        from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse  # noqa: PLC0415
+
+        parsed = urlparse(url)
+        if parsed.query:
+            remapped: list[tuple[str, str]] = []
+            for key, value in parse_qsl(parsed.query):
+                if key == "sslmode":
+                    remapped.append(("ssl", value))
+                elif key == "channel_binding":
+                    continue
+                else:
+                    remapped.append((key, value))
+            url = urlunparse(parsed._replace(query=urlencode(remapped)))
         if url.startswith("postgresql://"):
             return url.replace("postgresql://", "postgresql+asyncpg://", 1)
         if url.startswith("postgres://"):

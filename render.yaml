@@ -1,0 +1,55 @@
+# CyberVerse — Render blueprint (backend API service)
+# Human guide with secrets matrix, rollback, and gotchas: docs/DEPLOYMENT.md
+services:
+  - type: web
+    name: cyberverse-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 2
+    healthCheckPath: /health
+    # Controlled pre-deploy migration stage (idempotent; additive schema only).
+    preDeployCommand: alembic upgrade head
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      # Neon PostgreSQL (cyberverse database, us-east-1). Use the DIRECT
+      # (unpooled) connection string. libpq-only params (sslmode,
+      # channel_binding) present in console URLs are remapped for asyncpg
+      # automatically by app/core/config.py.
+      - key: DATABASE_URL
+        sync: false
+      # Redis: default to the in-network Render Redis add-on (redis://...).
+      # Upstash also works: use the rediss:// TLS URL.
+      - key: REDIS_URL
+        sync: false
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+      # JSON array. Update to the real Vercel domain after first frontend
+      # deploy (https://<project>.vercel.app). Wildcards are rejected by
+      # config validation; localhost is always allowed by regex.
+      - key: CORS_ORIGINS
+        value: '["https://cyberverse.vercel.app"]'
+      - key: BCRYPT_ROUNDS
+        value: "12"
+      - key: DATABASE_POOL_SIZE
+        value: "5"
+      - key: LOG_LEVEL
+        value: INFO
+      # Optional integrations — app degrades gracefully when unset.
+      - key: SENDGRID_API_KEY
+        sync: false
+      - key: CONTACT_FORM_RECIPIENT
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
