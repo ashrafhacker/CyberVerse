@@ -9,6 +9,7 @@ import {
   List, X, Loader2, RefreshCw,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
+import Breadcrumbs from '@/components/Breadcrumbs';
 import { API_URL, api, getTokens } from '@/lib/api';
 import { CURRICULUM } from '@/lib/curriculum';
 
@@ -652,16 +653,14 @@ export default function LessonPlayerPage() {
     <div className="flex flex-col min-h-screen bg-cyber-bg">
       <Navbar />
 
-      {/* Breadcrumb */}
-      <div className="border-b border-cyber-border bg-cyber-surface/50">
-        <div className="mx-auto max-w-screen-2xl px-4 py-2 flex items-center gap-2 text-xs text-cyber-muted">
-          <Link href="/courses" className="hover:text-cyber-primary transition-colors">Learning Paths</Link>
-          <ChevronRight className="h-3 w-3" />
-          <Link href={`/courses/${id}`} className="hover:text-cyber-primary transition-colors truncate max-w-[200px]">{courseTitle}</Link>
-          <ChevronRight className="h-3 w-3" />
-          <span className="text-cyber-text truncate max-w-[200px]">{lesson.title}</span>
-        </div>
-      </div>
+      {/* Breadcrumb (also emits BreadcrumbList JSON-LD) */}
+      <Breadcrumbs
+        items={[
+          { label: 'Learning Paths', href: '/courses' },
+          { label: courseTitle, href: `/courses/${id}` },
+          { label: lesson.title },
+        ]}
+      />
 
       <div className="flex flex-1 overflow-hidden">
         {/* Main content */}

@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Swords, CheckCircle2, Lock, Play, FileText } from 'lucide-react';
 import Navbar from '@/components/Navbar';
+import Breadcrumbs from '@/components/Breadcrumbs';
 import { TerminalCard, LoadingScreen } from '@/components/TerminalCard';
 import { useAuth } from '@/lib/auth';
 import { CURRICULUM } from '@/lib/curriculum';
@@ -175,6 +176,31 @@ export default function CourseDetailPage() {
   return (
     <>
       <Navbar />
+      <Breadcrumbs
+        items={[
+          { label: 'Learning Paths', href: '/courses' },
+          { label: data?.name ?? 'Course' },
+        ]}
+      />
+      {/* Course structured data for search engines (isomorphic values only). */}
+      {data && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Course',
+              name: data.name,
+              description: data.description,
+              provider: { '@type': 'Organization', name: 'CyberVerse', url: 'https://cyberverse.io' },
+              isAccessibleForFree: !data.is_premium,
+              ...(data.learning_objectives.length
+                ? { about: data.learning_objectives.slice(0, 6) }
+                : {}),
+            }),
+          }}
+        />
+      )}
       <main className="mx-auto max-w-5xl px-6 py-8">
         {error && <div className="mb-6 text-cyber-danger">{error}</div>}
 
@@ -291,6 +317,24 @@ export default function CourseDetailPage() {
                   </ul>
                 </TerminalCard>
               ))}
+
+              {/* Cross-links: keep course learners inside the practice loop. */}
+              <div className="mt-8 grid gap-3 sm:grid-cols-3">
+                {[
+                  { href: '/labs', label: 'Cyber Labs', desc: 'Practice the same skills in isolated range sessions.' },
+                  { href: '/missions', label: 'Daily Missions', desc: 'Short graded challenges that award XP and streaks.' },
+                  { href: '/game', label: 'Cyber Game', desc: 'CTF-style challenges and tournaments for friendly rivalry.' },
+                ].map((l) => (
+                  <Link
+                    key={l.href}
+                    href={l.href}
+                    className="rounded-lg border border-cyber-border bg-cyber-surface/50 p-4 transition-colors hover:border-cyber-primary"
+                  >
+                    <p className="text-sm font-semibold text-cyber-text">{l.label} →</p>
+                    <p className="mt-1 text-xs text-cyber-muted">{l.desc}</p>
+                  </Link>
+                ))}
+              </div>
             </div>
           </>
         )}

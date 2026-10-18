@@ -1,3 +1,4 @@
+import * as Cesium from 'cesium';
 import { Entity, Viewer, Cartesian3, Color, PinBuilder, LabelStyle, HeightReference } from 'cesium';
 
 export interface CyberEntityOptions {
@@ -181,7 +182,10 @@ export class CyberverseLayers {
   flyToEntity(id: string): void {
     const entity = this.entities.get(id);
     if (entity) {
-      this.viewer.camera.flyTo(entity);
+      const destination = entity.position?.getValue(Cesium.JulianDate.now());
+      if (destination) {
+        this.viewer.camera.flyTo({ destination });
+      }
     }
   }
 

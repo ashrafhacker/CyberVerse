@@ -35,7 +35,10 @@ describe('token storage', () => {
 });
 
 describe('apiRequest', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    // The single-flight refresh lock clears 50ms after a refresh settles;
+    // wait it out so a prior test's resolved lock cannot leak into this one.
+    await new Promise((resolve) => setTimeout(resolve, 60));
     if (typeof localStorage !== 'undefined') localStorage.clear();
     vi.restoreAllMocks();
   });

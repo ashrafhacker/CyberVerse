@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Users, Plus, Search, ChevronLeft, ChevronRight, Flag, Trophy, Star, Lock, Shield } from 'lucide-react';
 import Link from 'next/link';
-import { api } from '@/lib/api';
+import Image from 'next/image';
+import { api, ApiEnvelope } from '@/lib/api';
 
 interface Team {
   id: string;
@@ -43,7 +44,7 @@ export default function TeamsPage() {
   async function fetchTeams() {
     setLoading(true);
     try {
-      const res = await api.get<TeamsResponse>('/game/teams', {
+      const res = await api.get<ApiEnvelope<TeamsResponse>>('/game/teams', {
         params: { page, pageSize, search: search || undefined },
       });
       setTeams(res.data.teams);
@@ -124,7 +125,19 @@ export default function TeamsPage() {
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     {team.avatar ? (
-                      <img src={team.avatar} alt={team.name} className="h-10 w-10 rounded-full" />
+                      // Avatar URLs are user-supplied and host-arbitrary, so the
+                      // optimizer is bypassed (unoptimized) — but next/image still
+                      // gives us lazy loading + async decoding off-screen.
+                      <Image
+                        src={team.avatar}
+                        alt={team.name}
+                        width={40}
+                        height={40}
+                        unoptimized
+                        loading="lazy"
+                        decoding="async"
+                        className="h-10 w-10 rounded-full"
+                      />
                     ) : (
                       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-cyber-primary/20">
                         <Shield className="h-6 w-6 text-cyber-primary" />

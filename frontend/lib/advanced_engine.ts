@@ -97,7 +97,7 @@ export class SeededRng {
   constructor(seed: string | number) {
     const h = typeof seed === 'string' ? hashString(seed) : seed >>> 0;
     // SplitMix64 seeding
-    let z = h + 0x9e3779b97f4a7c15n;
+    let z = BigInt(h) + 0x9e3779b97f4a7c15n;
     // Use BigInt for 64-bit mixing, fallback to 32-bit if needed
     const lo = Number(z & 0xffffffffn);
     const hi = Number((z >> 32n) & 0xffffffffn);

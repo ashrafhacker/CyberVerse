@@ -520,9 +520,9 @@ export function flattenLessons(structure: CourseStructure): Array<{
     moduleName: string;
     lesson: CourseStructure['modules'][number]['lessons'][number];
   }> = [];
-  for (const module of [...(structure.modules ?? [])].sort((a, b) => a.order - b.order)) {
-    const lessons = [...(module.lessons ?? [])].sort((a, b) => a.order - b.order);
-    for (const lesson of lessons) flat.push({ moduleName: module.name, lesson });
+  for (const mod of [...(structure.modules ?? [])].sort((a, b) => a.order - b.order)) {
+    const lessons = [...(mod.lessons ?? [])].sort((a, b) => a.order - b.order);
+    for (const lesson of lessons) flat.push({ moduleName: mod.name, lesson });
   }
   return flat;
 }
@@ -668,7 +668,7 @@ async function loadSnapshot(): Promise<CommandCenterSnapshot> {
     safe<{ items: import('./types').Course[] }>('/courses?page_size=6'),
     safe<CtfChallenge[]>('/ctf/challenges'),
     safe<CtfLeaderRow[]>('/ctf/leaderboard'),
-    safe<{ my_rank: number | null; total_players: number }>('/leaderboard/?type=weekly&limit=1'),
+    safe<{ my_rank: { rank: number; score: number } | null; total_players: number }>('/leaderboard/?type=weekly&limit=1'),
     safe<GameTournamentList>('/game/tournaments?page_size=10'),
     safe<LessonProgressRow[]>('/progress/lessons'),
     safe<{ items: Array<{ id: string; notification_type: string; title: string; body?: string; link?: string; is_read: boolean; created_at?: string }> }>(
@@ -785,7 +785,7 @@ async function loadSnapshot(): Promise<CommandCenterSnapshot> {
   const warRoom: CCWarRoom = {
     solved,
     total: challengeList.length,
-    rank: weeklyBoard?.my_rank ?? null,
+    rank: weeklyBoard?.my_rank?.rank ?? null,
     totalPlayers: weeklyBoard?.total_players ?? null,
     events: warEvents,
     tournament: pickUpcomingTournament(tournaments?.tournaments ?? []),

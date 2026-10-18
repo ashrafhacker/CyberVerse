@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { CyberverseGlobe } from './GlobeViewer';
 import { GlobeLayerPanel } from './GlobeLayerPanel';
 import { useCyberverseLayers } from './useCyberverseLayers';
-import { CesiumPreloader } from '@/app/ClientComponents';
+import CesiumPreloader from './CesiumPreloader';
 
 export function CyberverseGlobePage() {
   const [labId, setLabId] = useState<string>('');

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Trophy, Calendar, Users, Clock, Flag, Star, ChevronLeft, ChevronRight, Lock, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
-import { api } from '@/lib/api';
+import { api, ApiEnvelope } from '@/lib/api';
 
 interface Tournament {
   id: string;
@@ -56,7 +56,7 @@ export default function TournamentsPage() {
   async function fetchTournaments() {
     setLoading(true);
     try {
-      const res = await api.get<TournamentsResponse>('/game/tournaments', {
+      const res = await api.get<ApiEnvelope<TournamentsResponse>>('/game/tournaments', {
         params: { status: activeTab === 'all' ? undefined : activeTab, page, pageSize },
       });
       setTournaments(res.data.tournaments);

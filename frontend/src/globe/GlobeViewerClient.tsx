@@ -77,12 +77,12 @@ export function GlobeViewerClient({
           googleTileset: tileset,
           cesiumToken,
           initialStack: tileset ? 'photoreal' : 'esri-imagery',
-          onChange: (state) => {
+          onChange: (state: unknown) => {
             window.dispatchEvent(
               new CustomEvent('gev:map-stack-changed', { detail: state }),
             );
           },
-          onError: (message) => console.warn('[MapStack]', message),
+          onError: (message: string) => console.warn('[MapStack]', message),
         });
 
         await mapStackController.setStack(tileset ? 'photoreal' : 'esri-imagery', { silent: true });
@@ -93,6 +93,7 @@ export function GlobeViewerClient({
         const operations = createApplicationOperations({
           requests: createApplicationRequestServices(),
           signal: { throwIfAborted: () => {}, aborted: false } as any,
+          eventTarget: globalThis.window,
         });
 
         // Initialize catalog and controls
@@ -105,10 +106,10 @@ export function GlobeViewerClient({
           presets: CITY_POIS,
           resolveApiKey: () => googleApiKey,
           signal: { throwIfAborted: () => {}, aborted: false } as any,
-        });
+        } as any);
 
         const catalog = createStandaloneCatalog({
-          nepalBoundaryResolver: (signal) =>
+          nepalBoundaryResolver: (signal: AbortSignal) =>
             operations.annotationResolver.resolveRegionRingForQuery(
               'Nepal',
               signal,
@@ -117,7 +118,7 @@ export function GlobeViewerClient({
             ),
           signal: { throwIfAborted: () => {}, aborted: false } as any,
           surface: operations.surface,
-        });
+        } as any);
 
         const controls = createStandaloneControls({
           viewer,
@@ -136,7 +137,7 @@ export function GlobeViewerClient({
 
         if (initialLayers.length > 0 && controls) {
           initialLayers.forEach((layer) => {
-            controls.toggleLayer?.(layer, true);
+            (controls as any).toggleLayer?.(layer, true);
           });
         }
       } catch (err) {

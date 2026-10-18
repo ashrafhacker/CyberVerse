@@ -3157,7 +3157,7 @@ test('an async layer pushes its own row refresh, and a busy chip refuses clicks'
 
   let settled = false;
   let writes = 0;
-  const module = {
+  const mod = {
     id: 'satellites',
     name: 'Satellites',
     icon: '',

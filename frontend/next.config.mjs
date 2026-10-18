@@ -3,6 +3,10 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   compress: true,
+  output: 'standalone',
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production',
+  },
   transpilePackages: ['cesium'],
   experimental: {
     optimizePackageImports: ['lucide-react', 'framer-motion', 'motion', '@radix-ui/react-icons', 'cesium'],
@@ -19,6 +23,41 @@ const nextConfig = {
         as: '*.js',
       },
     },
+  },
+  async headers() {
+    // Defense-in-depth headers. CSP stays permissive on script/style sources
+    // (Next.js inline boot scripts + styled-jsx require 'unsafe-inline'); it
+    // still constrains object/frame/media sources and blocks cross-origin
+    // framing. HSTS intentionally omitted: this deployment is plain-HTTP
+    // localhost — enable only after TLS is confirmed in production.
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: https:",
+      "font-src 'self' data:",
+      "media-src 'self' blob: data: https:",
+      "worker-src 'self' blob:",
+      "connect-src 'self' https: wss:",
+      "frame-ancestors *",
+      "base-uri 'self'",
+      "form-action 'self'",
+    ].join('; ');
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          // X-Frame-Options intentionally omitted: it can't express "allow all",
+          // and CSP frame-ancestors above is the controlling directive. Needed
+          // so the app can be embedded (e.g. in a preview/iframe). Re-add
+          // "DENY" for production hardening if embedding isn't required.
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' },
+          { key: 'Content-Security-Policy', value: csp },
+        ],
+      },
+    ];
   },
   async rewrites() {
     return [

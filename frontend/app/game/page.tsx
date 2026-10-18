@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Globe, Trophy, Flag, Users, Zap, Lock, Brain, Target, ChevronRight } from 'lucide-react';
+import { Globe, Trophy, Flag, Users, Zap, Lock, Brain, Target, ChevronRight, Star } from 'lucide-react';
 import Link from 'next/link';
-import { api } from '@/lib/api';
+import { api, ApiEnvelope } from '@/lib/api';
 
 interface GameChallenge {
   id: string;
@@ -63,7 +63,7 @@ export default function GamePage() {
   async function fetchChallenges() {
     setLoading(true);
     try {
-      const res = await api.get<ChallengesResponse>('/game/challenges', {
+      const res = await api.get<ApiEnvelope<ChallengesResponse>>('/game/challenges', {
         params: { category: activeCategory === 'all' ? undefined : activeCategory, published: true },
       });
       setChallenges(res.data.challenges);
@@ -275,7 +275,7 @@ export default function GamePage() {
             className="inline-flex items-center gap-2 rounded-lg border border-cyber-primary bg-cyber-primary/10 px-6 py-3 font-medium text-cyber-primary hover:bg-cyber-primary/20 transition-all"
           >
             <Zap className="h-5 w-5" />
-            Start with "Getting Started"
+            Start with &quot;Getting Started&quot;
           </Link>
         </div>
       </div>

@@ -96,7 +96,7 @@ describe('authErrorMessage', () => {
   });
 
   it('maps 5xx to a server-unavailable message', () => {
-    expect(authErrorMessage(new ApiError(503, 'x'), 'fb')).toMatch(/server is unavailable/i);
+    expect(authErrorMessage(new ApiError(503, 'x'), 'fb')).toMatch(/server is temporarily unavailable/i);
   });
 
   it('surfaces the API message for other statuses', () => {

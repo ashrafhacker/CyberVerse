@@ -23,8 +23,11 @@ const config: Config = {
         },
       },
       fontFamily: {
-        mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        // Resolve through CSS variables emitted by next/font in app/layout.tsx,
+        // so the families are self-hosted, subset and preloaded instead of
+        // fetched from Google Fonts on every page load.
+        mono: ['var(--cv-font-mono)', 'ui-monospace', 'monospace'],
+        sans: ['var(--cv-font-sans)', 'system-ui', 'sans-serif'],
       },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',

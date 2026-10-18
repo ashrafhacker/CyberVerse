@@ -60,7 +60,7 @@ describe('Navbar', () => {
     render(<Navbar />);
 
     expect(screen.getByRole('link', { name: /dashboard/i })).toHaveAttribute('href', '/dashboard');
-    expect(screen.getByRole('link', { name: /courses/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /learn/i })).toHaveAttribute('href', '/courses');
     expect(screen.getByRole('link', { name: /missions/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /leaderboard/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /profile/i })).toBeInTheDocument();

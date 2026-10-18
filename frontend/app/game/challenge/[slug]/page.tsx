@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { Flag, Clock, Star, Target, Lock, Brain, ExternalLink, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
-import { api } from '@/lib/api';
+import Link from 'next/link';
+import { api, ApiEnvelope } from '@/lib/api';
 
 interface GameChallenge {
   id: string;
@@ -20,7 +21,7 @@ interface GameChallenge {
   hints: string[];
   environmentConfig: Record<string, unknown>;
   createdAt: string;
-  author: { username: string; avatar?: string };
+  author: { username: string; avatar?: string } | null;
 }
 
 const DIFFICULTY_COLORS = {
@@ -34,6 +35,7 @@ export default function ChallengePage({ params }: { params: Promise<{ slug: stri
   const [challenge, setChallenge] = useState<GameChallenge | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [authError, setAuthError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submittedFlag, setSubmittedFlag] = useState('');
   const [result, setResult] = useState<{ correct: boolean; message: string; xpAwarded?: number } | null>(null);
@@ -49,11 +51,20 @@ export default function ChallengePage({ params }: { params: Promise<{ slug: stri
   async function fetchChallenge(slug: string) {
     setLoading(true);
     try {
-      const res = await api.get<GameChallenge>(`/game/challenges/${slug}`);
+      const res = await api.get<ApiEnvelope<GameChallenge>>(`/game/challenges/${slug}`);
       setChallenge(res.data);
       setTimeRemaining(res.data.timeLimit * 60);
-    } catch {
-      setError('Challenge not found');
+    } catch (err: unknown) {
+      // 401/403 means the session expired — not a missing challenge.
+      const status = typeof err === 'object' && err !== null && 'status' in err
+        ? (err as { status?: unknown }).status
+        : undefined;
+      if (status === 401 || status === 403) {
+        setAuthError(true);
+        setError('Your session expired. Please log in again.');
+      } else {
+        setError('Challenge not found');
+      }
     } finally {
       setLoading(false);
     }
@@ -92,7 +103,7 @@ export default function ChallengePage({ params }: { params: Promise<{ slug: stri
     setResult(null);
 
     try {
-      const res = await api.post<{ correct: boolean; message: string; xpAwarded?: number }>(
+      const res = await api.post<ApiEnvelope<{ correct: boolean; message: string; xpAwarded?: number }>>(
         `/game/challenges/${challenge?.slug}/submit`,
         { flag: submittedFlag.trim() }
       );
@@ -135,8 +146,25 @@ export default function ChallengePage({ params }: { params: Promise<{ slug: stri
       <div className="min-h-screen bg-cyber-bg text-cyber-text flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="mx-auto h-12 w-12 text-cyber-danger" />
-          <h2 className="mt-4 text-2xl font-bold">Challenge Not Found</h2>
+          <h2 className="mt-4 text-2xl font-bold">{authError ? 'Session Expired' : 'Challenge Not Found'}</h2>
           <p className="mt-2 text-cyber-muted">{error || 'The challenge you are looking for does not exist.'}</p>
+          <div className="mt-6 flex items-center justify-center gap-3">
+            {authError ? (
+              <Link
+                href="/login"
+                className="rounded-lg bg-cyber-primary px-6 py-2.5 font-medium text-cyber-bg hover:opacity-90 transition-all"
+              >
+                Log In Again
+              </Link>
+            ) : (
+              <Link
+                href="/game"
+                className="rounded-lg border border-cyber-primary px-6 py-2.5 font-medium text-cyber-primary hover:bg-cyber-primary/10 transition-all"
+              >
+                Back to Challenges
+              </Link>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -179,7 +207,7 @@ export default function ChallengePage({ params }: { params: Promise<{ slug: stri
             </span>
             <span className="flex items-center gap-1.5">
               <Target className="h-4 w-4" />
-              By {challenge.author.username}
+              By {challenge.author?.username ?? 'CyberVerse Team'}
             </span>
           </div>
         </header>
@@ -282,7 +310,7 @@ export default function ChallengePage({ params }: { params: Promise<{ slug: stri
                     disabled={!environmentReady || submitting}
                   />
                   <p className="mt-1 text-xs text-cyber-muted">
-                    Format: CYBERVERSE{{flag_content}}. Flags are case-sensitive.
+                    Format: CYBERVERSE{'{flag_content}'}. Flags are case-sensitive.
                   </p>
                 </div>
                 <button

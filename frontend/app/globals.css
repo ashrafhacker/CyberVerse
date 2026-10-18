@@ -4,6 +4,30 @@
 @config "../tailwind.config.ts";
 :root {
   color-scheme: dark;
+
+  /* --cv-font-sans / --cv-font-mono are injected by next/font (see
+     app/layout.tsx) as self-hosted, subset, preloaded families.
+
+     The legacy tokens below are kept so the 12 existing `var(--font-*)`
+     references keep resolving, but every one of them now resolves to the
+     same two families instead of naming a Google font that is no longer
+     fetched. Previously these names pointed at families loaded from a
+     third-party origin on every single page. */
+  --font-sans: var(--cv-font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--cv-font-mono), ui-monospace, monospace;
+  --font-tight: var(--cv-font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-switzer: var(--cv-font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-rethink: var(--cv-font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-geist: var(--cv-font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-urbanist: var(--cv-font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-grotesk: var(--cv-font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-clash: var(--cv-font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-redhat: var(--cv-font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-instrument: var(--cv-font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-instrument-tight: var(--cv-font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-instrument-serif: Georgia, ui-serif, serif;
+  --font-tillana: Georgia, ui-serif, serif;
+  --font-helvetica-neue: var(--cv-font-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
 body {
@@ -13,6 +37,21 @@ body {
 
 ::selection {
   background: rgba(0, 229, 255, 0.3);
+}
+
+/* Reduced-motion support: collapse every CSS animation/transition for
+   visitors who request it at the OS level. JS-driven motion (framer-motion,
+   globe) has its own matchMedia guards; this covers all Tailwind/custom CSS
+   utilities site-wide. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 @layer components {

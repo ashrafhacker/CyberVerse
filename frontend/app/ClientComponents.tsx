@@ -10,16 +10,3 @@ export function PerformanceMonitor() {
   }, []);
   return null;
 }
-
-export function CesiumPreloader() {
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      import('@/src/globe/cesium-loader').then(({ preloadCesium, preloadCesiumAssets }) => {
-        preloadCesiumAssets();
-        preloadCesium();
-      }).catch(() => {});
-    }, 3000);
-    return () => clearTimeout(timer);
-  }, []);
-  return null;
-}

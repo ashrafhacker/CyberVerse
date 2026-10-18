@@ -301,13 +301,13 @@ export default function RealTimeLabPage() {
 
                 <TerminalCard title="recommendations.yml">
                   <ol className="space-y-1.5">
-                    {analysis.recommendations.map((rec, i) => (
+                    {analysis.recommendations.map((rec: string, i) => (
                       <li key={i} className="text-xs text-cyber-text">
                         <span className="text-cyber-primary">{i + 1}.</span> {rec}
                       </li>
                     ))}
                   </ol>
-                  {(analysis.safety_metadata as Record<string, unknown>)?.fictional_only && (
+                  {Boolean((analysis.safety_metadata as Record<string, unknown>)?.fictional_only) && (
                     <p className="mt-3 text-[10px] text-cyber-muted italic">
                       Simulation data only — guidance applies to this fictional sandbox.
                     </p>

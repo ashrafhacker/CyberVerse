@@ -453,7 +453,10 @@ export async function apiRequest<T = unknown>(rawPath: string, options: RequestO
   const promise = exec();
   if (method === 'GET') {
     inflight.set(dKey, promise);
-    promise.finally(() => inflight.delete(dKey));
+    // `.finally()` returns a fresh promise that also rejects; consume that
+    // copy so a failed request doesn't surface as an unhandled rejection —
+    // the original `promise` below still delivers the error to the caller.
+    promise.finally(() => inflight.delete(dKey)).catch(() => {/* consumed */});
   }
   return promise;
 }

@@ -512,7 +512,7 @@ test('tracked aircraft yields to strongest-fire and vessel voice flights before 
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
   for (const kind of ['fire', 'vessel']) {
     const { order, viewer, styleManager } = createVoiceNavigationHarness();
-    const module = kind === 'fire'
+    const mod = kind === 'fire'
       ? {
           getStrongestFire: () => ({
             id: 'fire-1', label: 'Strongest fire', latitude: 37.77, longitude: -122.42, frp: 900,
@@ -524,7 +524,7 @@ test('tracked aircraft yields to strongest-fire and vessel voice flights before 
         };
     const layerId = kind === 'fire' ? 'local-firms' : 'ais-live-vessels';
     const dataManager = {
-      layers: new Map([[layerId, { module }]]),
+      layers: new Map([[layerId, { module: mod }]]),
       isEnabled: (id) => id === layerId,
       getAll: () => [],
     };

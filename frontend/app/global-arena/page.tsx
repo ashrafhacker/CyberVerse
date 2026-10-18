@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Globe, Trophy, Flag, User, Star, ChevronLeft, ChevronRight } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, ApiEnvelope } from '@/lib/api';
 import Link from 'next/link';
 
 interface LeaderboardEntry {
@@ -48,7 +48,7 @@ export default function GlobalArenaPage() {
   async function fetchLeaderboard() {
     setLoading(true);
     try {
-      const res = await api.get<LeaderboardResponse>(
+      const res = await api.get<ApiEnvelope<LeaderboardResponse>>(
         `/leaderboard/${activeTab}`,
         { params: { page, pageSize } }
       );

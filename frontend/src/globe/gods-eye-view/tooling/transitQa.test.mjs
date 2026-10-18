@@ -487,9 +487,9 @@ test('sensor sampler waits for postRender and reads framebuffer pixels; stopped 
     'a clear centre cannot qualify a partially obscured core',
   );
   delete scene.pick;
-  const module = window.__godsEyeView.dataManager.layers.get('transit').module;
-  const getState = module._transitStateForTest;
-  module._transitStateForTest = () => {
+  const mod = window.__godsEyeView.dataManager.layers.get('transit').module;
+  const getState = mod._transitStateForTest;
+  mod._transitStateForTest = () => {
     const state = getState();
     state._stylePreset = 'noir';
     state._vehicles.get('bus').marker.position.x = 0.65;

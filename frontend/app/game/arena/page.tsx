@@ -1,8 +1,9 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Globe, Trophy, Zap, Users, Flag, Star, ChevronLeft, ChevronRight, Play, Shield, Sword, ShieldAlert } from 'lucide-react';
 import Link from 'next/link';
-import { api } from '@/lib/api';
+import { api, ApiEnvelope } from '@/lib/api';
 
 interface ArenaStats {
   activeChallenges: number;
@@ -21,7 +22,7 @@ export default function ArenaPage() {
 
   async function fetchStats() {
     try {
-      const res = await api.get<ArenaStats>('/game/arena/stats');
+      const res = await api.get<ApiEnvelope<ArenaStats>>('/game/arena/stats');
       setStats(res.data);
     } catch {
       setStats(null);
