@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import CurrentUser, require_admin
 from app.core.database import get_db
 from app.models.progress import LessonProgress
+from app.models.user import User
 from app.schemas.base import APIResponse
 from app.services.progress_service import ProgressService
 

@@ -12,9 +12,15 @@ const apiMock = vi.hoisted(() => ({
   clearTokens: vi.fn(),
   getTokens: vi.fn(),
   setTokens: vi.fn(),
+  setTokenRefresher: vi.fn(),
+}));
+
+const clerkMock = vi.hoisted(() => ({
+  useAuth: vi.fn(),
 }));
 
 vi.mock('@/lib/api', () => apiMock);
+vi.mock('@clerk/nextjs', () => clerkMock);
 vi.mock('next/navigation', () => ({
   usePathname: () => navMock.pathname,
   useRouter: () => navMock.router,
@@ -31,10 +37,23 @@ const TEST_USER: User = {
   status: 'active',
   is_verified: true,
   is_2fa_enabled: false,
-  provider: 'google',
+  provider: 'clerk',
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 };
+
+function clerkSession(state: {
+  isLoaded?: boolean;
+  isSignedIn?: boolean;
+  getToken?: unknown;
+}) {
+  clerkMock.useAuth.mockReturnValue({
+    isLoaded: state.isLoaded ?? true,
+    isSignedIn: state.isSignedIn ?? false,
+    getToken: (state.getToken as never) ?? vi.fn().mockResolvedValue(null),
+    signOut: vi.fn().mockResolvedValue(undefined),
+  });
+}
 
 function wrapper({ children }: { children: ReactNode }) {
   return <AuthProvider>{children}</AuthProvider>;
@@ -44,10 +63,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   sessionStorage.clear();
   apiMock.getTokens.mockReturnValue({ access: null, refresh: null });
+  clerkSession({ isLoaded: true, isSignedIn: false });
 });
 
 describe('useRequireAuth', () => {
   it('redirects to /login with the current URL saved when unauthenticated', async () => {
+    clerkSession({ isLoaded: true, isSignedIn: false });
     const { result } = renderHook(() => useRequireAuth(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -59,9 +80,8 @@ describe('useRequireAuth', () => {
   });
 
   it('does NOT redirect while the session is still loading', async () => {
-    // Tokens exist but /auth/me never resolves -> loading stays true.
-    apiMock.getTokens.mockReturnValue({ access: 'acc', refresh: 'ref' });
-    apiMock.api.get.mockImplementation(() => new Promise(() => {}));
+    // Clerk has not finished restoring the session yet -> loading stays true.
+    clerkSession({ isLoaded: false, isSignedIn: false });
 
     const { result } = renderHook(() => useRequireAuth(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(true));
@@ -69,7 +89,11 @@ describe('useRequireAuth', () => {
   });
 
   it('does NOT redirect when a valid session is restored', async () => {
-    apiMock.getTokens.mockReturnValue({ access: 'acc', refresh: 'ref' });
+    clerkSession({
+      isLoaded: true,
+      isSignedIn: true,
+      getToken: vi.fn().mockResolvedValue('clerk-session-jwt'),
+    });
     apiMock.api.get.mockResolvedValue({ data: TEST_USER });
 
     const { result } = renderHook(() => useRequireAuth(), { wrapper });

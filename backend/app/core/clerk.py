@@ -47,7 +47,7 @@ def clerk_frontend_api() -> str:
 
     The publishable key is ``pk_test_<base64(domain)>`` or ``pk_live_<base64>``.
     Decoding the payload yields the instance domain (e.g.
-    ``suited-verdict-3663.clerk.accounts.dev``).
+    ``suited-vervet-3663.clerk.accounts.dev``).
     """
     pk = settings.CLERK_PUBLISHABLE_KEY
     if not pk:

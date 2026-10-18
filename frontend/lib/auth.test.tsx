@@ -10,9 +10,24 @@ const apiMock = vi.hoisted(() => ({
   clearTokens: vi.fn(),
   getTokens: vi.fn(),
   setTokens: vi.fn(),
+  setTokenRefresher: vi.fn(),
 }));
 
+const clerkMock = vi.hoisted(() => ({
+  useAuth: vi.fn(),
+}));
+
+const navMock = vi.hoisted(() => {
+  const replace = vi.fn();
+  return { replace, router: { replace } };
+});
+
 vi.mock('@/lib/api', () => apiMock);
+vi.mock('@clerk/nextjs', () => clerkMock);
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/',
+  useRouter: () => navMock.router,
+}));
 
 import { AuthProvider, useAuth } from './auth';
 import type { User } from './types';
@@ -25,10 +40,29 @@ const TEST_USER: User = {
   status: 'active',
   is_verified: true,
   is_2fa_enabled: false,
-  provider: 'local',
+  provider: 'clerk',
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 };
+
+function clerkSignedOut() {
+  clerkMock.useAuth.mockReturnValue({
+    isLoaded: true,
+    isSignedIn: false,
+    getToken: vi.fn().mockResolvedValue(null),
+    signOut: vi.fn().mockResolvedValue(undefined),
+  });
+}
+
+function clerkSignedIn(overrides: Record<string, unknown> = {}) {
+  clerkMock.useAuth.mockReturnValue({
+    isLoaded: true,
+    isSignedIn: true,
+    getToken: vi.fn().mockResolvedValue('clerk-session-jwt'),
+    signOut: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  });
+}
 
 function wrapper({ children }: { children: ReactNode }) {
   return <AuthProvider>{children}</AuthProvider>;
@@ -36,7 +70,9 @@ function wrapper({ children }: { children: ReactNode }) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  sessionStorage.clear();
   apiMock.getTokens.mockReturnValue({ access: null, refresh: null });
+  clerkSignedOut();
 });
 
 describe('useAuth', () => {
@@ -44,56 +80,44 @@ describe('useAuth', () => {
     expect(() => renderHook(() => useAuth())).toThrow('useAuth must be used within AuthProvider');
   });
 
-  it('resolves loading false with user null when no tokens exist', async () => {
+  it('resolves loading false with user null when signed out of Clerk', async () => {
+    clerkSignedOut();
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.user).toBeNull();
+    expect(apiMock.api.get).not.toHaveBeenCalled();
   });
 
-  it('fetches the current user on mount when tokens exist', async () => {
-    apiMock.getTokens.mockReturnValue({ access: 'acc', refresh: 'ref' });
+  it('fetches the backend user on mount when the Clerk session is present', async () => {
+    clerkSignedIn();
     apiMock.api.get.mockResolvedValue({ data: TEST_USER });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(apiMock.api.get).toHaveBeenCalledWith('/auth/me', {
-      cache: 'swr',
-      cacheTtlMs: 60_000,
-      cacheStaleMs: 30_000,
-    });
+    // The Clerk session token is seeded so the API client attaches it.
+    expect(apiMock.setTokens).toHaveBeenCalledWith('clerk-session-jwt', '');
+    expect(apiMock.api.get).toHaveBeenCalledWith('/auth/me', { cache: 'no-store' });
     expect(result.current.user).toEqual(TEST_USER);
   });
 
-  it('login stores tokens and sets the user', async () => {
-    apiMock.api.post.mockResolvedValue({
-      data: {
-        access_token: 'acc-token',
-        refresh_token: 'ref-token',
-        user: TEST_USER,
-      },
-    });
+  it('refreshUser re-fetches the backend user', async () => {
+    clerkSignedIn();
+    apiMock.api.get.mockResolvedValue({ data: TEST_USER });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.user).toEqual(TEST_USER));
 
-    let returned: User | undefined;
     await act(async () => {
-      returned = await result.current.login('neo@cyberverse.io', 'password123');
+      await result.current.refreshUser();
     });
 
-    expect(apiMock.api.post).toHaveBeenCalledWith(
-      '/auth/login',
-      { email: 'neo@cyberverse.io', password: 'password123' },
-      { auth: false },
-    );
-    expect(apiMock.setTokens).toHaveBeenCalledWith('acc-token', 'ref-token');
+    expect(apiMock.api.get).toHaveBeenCalledTimes(2);
     expect(result.current.user).toEqual(TEST_USER);
-    expect(returned).toEqual(TEST_USER);
   });
 
-  it('logout clears tokens and user even when API call fails', async () => {
-    apiMock.api.post.mockRejectedValue(new Error('network down'));
-    apiMock.getTokens.mockReturnValue({ access: 'acc', refresh: 'ref' });
+  it('logout signs out of Clerk, clears tokens and the user', async () => {
+    clerkSignedIn();
     apiMock.api.get.mockResolvedValue({ data: TEST_USER });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
@@ -104,6 +128,31 @@ describe('useAuth', () => {
     });
 
     expect(apiMock.clearTokens).toHaveBeenCalled();
+    expect(result.current.user).toBeNull();
+    expect(navMock.replace).toHaveBeenCalledWith('/');
+  });
+
+  it('logout clears local state even when signOut fails', async () => {
+    clerkSignedIn({ signOut: vi.fn().mockRejectedValue(new Error('network down')) });
+    apiMock.api.get.mockResolvedValue({ data: TEST_USER });
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.user).toEqual(TEST_USER));
+
+    await act(async () => {
+      await result.current.logout();
+    });
+
+    expect(apiMock.clearTokens).toHaveBeenCalled();
+    expect(result.current.user).toBeNull();
+  });
+
+  it('keeps the local user null when /auth/me fails for a signed-in session', async () => {
+    clerkSignedIn();
+    apiMock.api.get.mockRejectedValue(new Error('backend down'));
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.user).toBeNull();
   });
 });

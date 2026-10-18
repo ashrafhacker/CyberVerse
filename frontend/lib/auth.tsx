@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useAuth as useClerkAuth, useUser } from '@clerk/nextjs';
+import { useAuth as useClerkAuth } from '@clerk/nextjs';
 import { api, clearTokens, setTokenRefresher, setTokens } from './api';
 import { saveRedirectTarget } from './auth-utils';
 import type { User } from './types';
