@@ -4,7 +4,7 @@ Target architecture (per project brief):
 
 | Layer      | Provider            | State                                                        |
 | ---------- | ------------------- | ------------------------------------------------------------ |
-| Frontend   | Vercel              | Project deployable; auth verified (`bosserror1931-3672`)      |
+| Frontend   | Vercel              | CLI auth OK, but account **suspended (billing)** — deploy blocked |
 | Backend    | Render              | `render.yaml` blueprint ready — **blocked on Render account** |
 | Database   | Neon (us-east-1)    | **Migrated & verified** — `cyberverse` DB, 75 tables, head=`0007_library_enum_names` |
 | Cache/jobs | Render Redis (default) or Upstash | Config via `REDIS_URL`/`CELERY_*` — no Upstash creds present |
@@ -77,6 +77,12 @@ free tiers are the intended substitutes.
 
 ## 3. Frontend on Vercel
 
+> **Status: BLOCKED on billing.** The authenticated Vercel account
+> (`bosserror1931-3672`, team `bosserror1931-gmailcoms-projects`) is suspended:
+> *"To reactivate your subscription, add a valid payment method."* Read-only CLI
+> calls work; project creation, `env add`, and deploys are rejected until the
+> subscription is reactivated in the Vercel dashboard → Billing.
+
 - Next.js app root: `frontend/` (project setting `rootDirectory: frontend`).
 - `/api/:path*` rewrites to `BACKEND_URL` (server-side env, default `http://127.0.0.1:8000`).
 - No `NEXT_PUBLIC_*` required for core operation (same-origin `/api` via rewrite).
@@ -133,6 +139,7 @@ These cannot be created from this machine (no GitHub write access — see §1).
 | Item | Status | Exact step to unblock |
 | ---- | ------ | --------------------- |
 | GitHub push | Blocked | Provide a PAT/`gh auth login`; push `repair/full-stack-production` |
+| Vercel deploy | Blocked (billing) | Reactivate the Vercel subscription (add valid payment method), then run the §3 commands |
 | Render account | Blocked | Create account → connect repo (blueprint auto-applies `render.yaml`) |
 | Upstash Redis | Not configured | Create free DB → put `rediss://...` into `REDIS_URL`/`CELERY_*` (Render Redis add-on is the simpler default) |
 | Cloudflare R2 | Blocked | Needs `R2_ACCOUNT_ID`/keys; `backend/.env.r2.example` documents the shape. Existing `cyberverse-assets` bucket must be reconciled by checksum before any upload — no bulk upload performed |
