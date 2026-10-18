@@ -66,6 +66,7 @@ class AuthProvider(str, enum.Enum):
     EMAIL = "email"
     GOOGLE = "google"
     GITHUB = "github"
+    CLERK = "clerk"
 
 
 class User(Base):

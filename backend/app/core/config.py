@@ -202,6 +202,11 @@ class Settings(BaseSettings):
     SUPABASE_JWT_SECRET: SecretStr | None = None
     SUPABASE_STORAGE_BUCKET: str = Field(default="cyberverse-assets")
 
+    # Clerk (primary auth provider — signs users in/out, issues session tokens)
+    CLERK_PUBLISHABLE_KEY: str | None = None
+    CLERK_SECRET_KEY: SecretStr | None = None
+    CLERK_WEBHOOK_SECRET: SecretStr | None = None
+
     # -------------------------------------------------------------------
     # CORS & HTTP
     # -------------------------------------------------------------------

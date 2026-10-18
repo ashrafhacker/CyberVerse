@@ -10,14 +10,81 @@ from uuid import UUID
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError as JoseJWTError
+from jose import jwt as jose_jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.clerk import ClerkError, verify_clerk_session_token
 from app.core.database import get_db
 from app.core.security import decode_token
 from app.models.user import User, UserRole, UserStatus
+from app.services.clerk_sync import sync_clerk_user
 
 bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def _token_alg(token: str) -> str:
+    """Return the JWS ``alg`` header for a token ('' if unparseable)."""
+    try:
+        return jose_jwt.get_unverified_header(token).get("alg", "")
+    except JoseJWTError:
+        return ""
+
+
+async def _resolve_user(db: AsyncSession, token: str) -> User:
+    """
+    Resolve the User for either a Clerk session token or a legacy JWT.
+
+    Clerk session tokens are RS256 and carry a Clerk user id (``user_…``) in
+    ``sub``; they are resolved via ``users.provider_id`` with lazy provisioning
+    on first sight. Legacy first-party JWTs are HS256 and carry the local user
+    UUID in ``sub``.
+
+    Raises:
+        HTTPException: 401 if the token is invalid or the user cannot be found.
+    """
+    if _token_alg(token) == "RS256":
+        # Clerk session token.
+        try:
+            claims = await verify_clerk_session_token(token)
+        except ClerkError as err:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired token",
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from err
+        clerk_user_id = claims["sub"]
+        result = await db.execute(select(User).where(User.provider_id == clerk_user_id))
+        user = result.scalar_one_or_none()
+        if user is None:
+            # First time this Clerk identity hits the API — provision locally.
+            try:
+                user = await sync_clerk_user(db, clerk_user_id)
+            except Exception as err:  # noqa: BLE001 — Clerk API/network/sync failure
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Unable to provision account from Clerk",
+                    headers={"WWW-Authenticate": "Bearer"},
+                ) from err
+        return user
+
+    # Legacy first-party JWT (HS256).
+    payload = decode_token(token, expected_type="access")
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload",
+        )
+    result = await db.execute(select(User).where(User.id == UUID(user_id)))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+    return user
 
 
 async def get_current_user(
@@ -26,7 +93,12 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db),  # noqa: B008
 ) -> User:
     """
-    Get the authenticated user from bearer token or query parameter.
+    Get the authenticated user from a Clerk session token or legacy JWT.
+
+    Accepts the token from the Authorization header or (for WebSocket) a query
+    parameter. Supports both Clerk session tokens (RS256) and the legacy
+    first-party JWT (HS256) so auth-protected endpoints work across the
+    migration to Clerk.
 
     Args:
         credentials: HTTP Authorization header credentials.
@@ -50,29 +122,15 @@ async def get_current_user(
         )
 
     try:
-        payload = decode_token(actual_token, expected_type="access")
+        user = await _resolve_user(db, actual_token)
+    except HTTPException:
+        raise
     except ValueError as err:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
         ) from err
-
-    user_id = payload.get("sub")
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token payload",
-        )
-
-    result = await db.execute(select(User).where(User.id == UUID(user_id)))
-    user = result.scalar_one_or_none()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-        )
 
     if user.status not in (UserStatus.ACTIVE, UserStatus.PENDING):
         raise HTTPException(
@@ -108,16 +166,10 @@ async def get_optional_user(
     if not actual_token:
         return None
     try:
-        # Access tokens only: a refresh token must never pass as access here.
-        payload = decode_token(actual_token, expected_type="access")
-        user_id = payload.get("sub")
-        if not user_id:
-            return None
-        result = await db.execute(select(User).where(User.id == UUID(user_id)))
-        user = result.scalar_one_or_none()
+        user = await _resolve_user(db, actual_token)
         if user and user.status in (UserStatus.ACTIVE, UserStatus.PENDING):
             return user
-    except (ValueError, KeyError, AttributeError):
+    except (HTTPException, ValueError, KeyError, AttributeError):
         pass
     return None
 
