@@ -163,6 +163,11 @@ jobs:
     needs: [backend-lint, frontend-lint]
     steps:
       - uses: actions/checkout@v4
+        with:
+          # gitleaks-action scans the PR range BASE^..HEAD; a shallow clone
+          # (default depth=1) cannot resolve BASE^, so gitleaks aborts with
+          # "unknown revision" and exits 1 on a partial (0-byte) scan.
+          fetch-depth: 0
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
