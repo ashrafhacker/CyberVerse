@@ -5,6 +5,35 @@ import { ToastProvider } from '@/lib/toast';
 import CookieConsent from '@/components/CookieConsent';
 import './globals.css';
 
+// Clerk clerk-js bundle tuning.
+//
+// The browser fetches clerk-js from the instance origin derived from the
+// publishable key (307 -> pinned version, Cloudflare, immutable cache). On a
+// cold connection that first fetch pays DNS+TLS (~0.5s+) and a slow or blocked
+// fetch trips Clerk's 15s scriptLoadTimeout with
+// "ClerkRuntimeError: failed_to_load_clerk_js". Two mitigations:
+//  1. <link rel="preconnect"> to the origin actually used (below), and
+//  2. NEXT_PUBLIC_CLERK_JS_URL as an escape hatch to serve clerk-js from an
+//     alternate CDN (e.g. https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js)
+//     when the instance domain is unreachable from a visitor's network.
+//     next.config.mjs adds the override's origin to script-src at build time.
+const clerkJsUrl = process.env.NEXT_PUBLIC_CLERK_JS_URL || undefined;
+const clerkPreconnectOrigin = (() => {
+  if (clerkJsUrl) {
+    try {
+      return new URL(clerkJsUrl).origin;
+    } catch {
+      // fall through to the instance origin below
+    }
+  }
+  try {
+    const b64 = (process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? '').split('_')[2] ?? '';
+    return b64 ? `https://${atob(b64).replace(/\$$/, '')}` : null;
+  } catch {
+    return null;
+  }
+})();
+
 // NOTE (offline/fast builds): previously Inter + JetBrains Mono were loaded
 // via next/font/google, which downloads woff2 from Google at build time and
 // fails the whole production build when fonts.googleapis.com is unreachable.
@@ -91,6 +120,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
             No fonts.gstatic.com prefetch either: fonts are self-hosted from
             our own origin via next/font, so that origin is never contacted. */}
+        {clerkPreconnectOrigin && (
+          <link rel="preconnect" href={clerkPreconnectOrigin} crossOrigin="" />
+        )}
       </head>
       <body suppressHydrationWarning>
         <script
@@ -113,7 +145,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             }),
           }}
         />
-        <ClerkProvider>
+        <ClerkProvider {...(clerkJsUrl ? { clerkJSUrl: clerkJsUrl } : {})}>
           <AuthProvider>
             <ToastProvider>
               {children}
