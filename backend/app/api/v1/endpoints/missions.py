@@ -33,25 +33,8 @@ async def list_missions(
         db, mission_type=mission_type, page=page, page_size=page_size
     )
 
-    items = [
-        {
-            "id": str(m.id),
-            "slug": m.slug,
-            "name": m.name,
-            "short_description": m.short_description,
-            "mission_type": m.mission_type.value if hasattr(m.mission_type, "value") else m.mission_type,
-            "difficulty": m.difficulty.value if hasattr(m.difficulty, "value") else m.difficulty,
-            "estimated_minutes": m.estimated_minutes,
-            "xp_reward": m.xp_reward,
-            "coins_reward": m.coins_reward,
-            "is_premium": m.is_premium,
-            "tags": m.tags,
-            "thumbnail_url": m.thumbnail_url,
-        }
-        for m in missions
-    ]
-
-    data = PaginatedResponse.create(items, total, page, page_size)
+    # CourseService already returns JSON-safe dicts (ORM objects can't survive the cache)
+    data = PaginatedResponse.create(missions, total, page, page_size)
     return APIResponse[PaginatedResponse](data=data)
 
 

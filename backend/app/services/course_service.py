@@ -9,6 +9,57 @@ from app.models.course import Course, LearningPath, Module
 from app.models.mission import Mission
 
 
+def _enum_value(value):
+    """Return the plain value for enums, pass through everything else."""
+    return value.value if hasattr(value, "value") else value
+
+
+def _serialize_course(course: Course) -> dict:
+    """Plain JSON-safe dict — ORM objects cannot be cached (JSON `default=str` stringifies them)."""
+    return {
+        "id": str(course.id),
+        "slug": course.slug,
+        "name": course.name,
+        "description": course.description,
+        "short_description": course.short_description,
+        "difficulty": _enum_value(course.difficulty),
+        "estimated_hours": course.estimated_hours,
+        "thumbnail_url": course.thumbnail_url,
+        "is_premium": course.is_premium,
+        "tags": course.tags,
+    }
+
+
+def _serialize_learning_path(path: LearningPath) -> dict:
+    return {
+        "id": str(path.id),
+        "slug": path.slug,
+        "name": path.name,
+        "description": path.description,
+        "difficulty": _enum_value(path.difficulty),
+        "estimated_hours": path.estimated_hours,
+        "is_premium": path.is_premium,
+        "order": path.order,
+    }
+
+
+def _serialize_mission(mission: Mission) -> dict:
+    return {
+        "id": str(mission.id),
+        "slug": mission.slug,
+        "name": mission.name,
+        "short_description": mission.short_description,
+        "mission_type": _enum_value(mission.mission_type),
+        "difficulty": _enum_value(mission.difficulty),
+        "estimated_minutes": mission.estimated_minutes,
+        "xp_reward": mission.xp_reward,
+        "coins_reward": mission.coins_reward,
+        "is_premium": mission.is_premium,
+        "tags": mission.tags,
+        "thumbnail_url": mission.thumbnail_url,
+    }
+
+
 class CourseService:
     @staticmethod
     async def get_course_structure(db: AsyncSession, course_id: UUID) -> dict | None:
@@ -74,7 +125,7 @@ class CourseService:
         premium_only: bool | None = None,
         page: int = 1,
         page_size: int = 20,
-    ) -> tuple[list, int]:
+    ) -> tuple[list[dict], int]:
         cache_key = f"search:q={query}:d={difficulty}:p={premium_only}:page={page}:size={page_size}"
         cached = await course_cache.get(cache_key)
         if cached is not None:
@@ -94,7 +145,7 @@ class CourseService:
 
         stmt = stmt.order_by(Course.order).offset((page - 1) * page_size).limit(page_size)
         result = await db.execute(stmt)
-        courses = list(result.scalars().all())
+        courses = [_serialize_course(c) for c in result.scalars().all()]
         
         await course_cache.set(cache_key, {"courses": courses, "total": total}, ttl=300)
         return courses, total
@@ -109,7 +160,7 @@ class CourseService:
         result = await db.execute(
             select(LearningPath).where(LearningPath.status == "published").order_by(LearningPath.order)
         )
-        paths = list(result.scalars().all())
+        paths = [_serialize_learning_path(p) for p in result.scalars().all()]
         
         await course_cache.set(cache_key, paths, ttl=600)
         return paths
@@ -130,7 +181,7 @@ class CourseService:
 
         stmt = stmt.order_by(Mission.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
         result = await db.execute(stmt)
-        missions = list(result.scalars().all())
+        missions = [_serialize_mission(m) for m in result.scalars().all()]
         
         await course_cache.set(cache_key, {"missions": missions, "total": total}, ttl=300)
         return missions, total

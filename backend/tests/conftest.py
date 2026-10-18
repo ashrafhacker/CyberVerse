@@ -25,9 +25,19 @@ from app.main import app  # noqa: E402
 
 
 def _make_engine():
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        if database_url.startswith("postgresql://"):
+            database_url = database_url.replace(
+                "postgresql://", "postgresql+asyncpg://", 1
+            )
+        return create_async_engine(database_url)
+
     temp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
     temp_db.close()
-    return create_async_engine(f"sqlite+aiosqlite:///{temp_db.name}", poolclass=None)
+    return create_async_engine(
+        f"sqlite+aiosqlite:///{temp_db.name}", poolclass=None
+    )
 
 
 @pytest_asyncio.fixture(scope="function")
@@ -36,12 +46,16 @@ async def db_engine():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield engine
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    database_file = engine.url.database
+    is_sqlite = engine.url.drivername == "sqlite+aiosqlite"
     await engine.dispose()
-    import os
-    try:
-        os.unlink(str(engine.url).replace("sqlite+aiosqlite:///", ""))
-    except OSError:
-        pass
+    if is_sqlite and database_file:
+        try:
+            os.unlink(database_file)
+        except OSError:
+            pass
 
 
 @pytest_asyncio.fixture
@@ -66,3 +80,29 @@ async def client(db_engine):
         yield ac
 
     app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _reset_rate_limits():
+    """Clear rate-limit counters before every test.
+
+    The register/login limiters are keyed by client IP (scope + IP), so the
+    ~10 register calls a single pytest run makes would exhaust the 3/hour
+    production quota and hand every later test a 429. Only the shared Redis
+    counters are reset — the limiter code path itself still runs for real.
+    """
+    import redis.asyncio as _redis
+
+    try:
+        from app.core.config import get_settings
+
+        # A fresh connection per test: RedisClient._instance is a singleton
+        # bound to the first test's event loop and breaks on later tests.
+        client = _redis.from_url(get_settings().REDIS_URL)
+        async for key in client.scan_iter(match="ratelimit:*"):
+            await client.delete(key)
+        await client.aclose()
+    except Exception:
+        # Redis unreachable → RateLimiter fails open, nothing to reset.
+        pass
+    yield

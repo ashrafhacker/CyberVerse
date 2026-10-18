@@ -61,7 +61,7 @@ class Achievement(Base):
 
     criteria_type: Mapped[str] = mapped_column(String(50), nullable=False)
     criteria_value: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    criteria_meta_data: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    criteria_metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
 
     is_hidden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_seasonal: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

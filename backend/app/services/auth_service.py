@@ -217,11 +217,29 @@ class AuthService:
         except Exception:
             raise AuthenticationError("Invalid refresh token")
 
+        result = await db.execute(select(Session).where(Session.refresh_token == refresh_token))
+        session = result.scalar_one_or_none()
+        if session is None:
+            raise AuthenticationError("Invalid refresh token")
+        if session.is_revoked:
+            # Refresh-token reuse = possible theft. Kill all user sessions.
+            await db.execute(
+                update(Session)
+                .where(Session.user_id == session.user_id, Session.is_revoked.is_(False))
+                .values(is_revoked=True, revoked_at=datetime.now(UTC), revoked_by="reuse_detected")
+            )
+            await db.commit()
+            raise AuthenticationError("Session revoked for security reasons. Please log in again.")
+
         result = await db.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
         if not user:
             raise NotFoundError("User not found")
 
+        # Rotate: revoke the presented refresh token, issue a fresh pair.
+        session.is_revoked = True
+        session.revoked_at = datetime.now(UTC)
+        session.revoked_by = "rotated"
         tokens = await AuthService._issue_tokens(db, user, request_meta)
         return {"user": user, **tokens}
 

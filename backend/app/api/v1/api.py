@@ -14,6 +14,7 @@ from app.api.v1.endpoints import (
     auth,
     certificates,
     chat,
+    contact,
     courses,
     ctf,
     game,
@@ -65,5 +66,6 @@ api_router.include_router(progression.router, prefix="/progression", tags=["Prog
 api_router.include_router(skill.router, prefix="/skills", tags=["Skills"])
 api_router.include_router(soc.router, prefix="/soc", tags=["SOC"])
 api_router.include_router(support.router, prefix="/support", tags=["Support"])
+api_router.include_router(contact.router, prefix="/contact", tags=["Contact"])
 api_router.include_router(threat_intel.router, prefix="/threat-intel", tags=["Threat Intelligence"])
 api_router.include_router(media.router, prefix="/media", tags=["Media"])

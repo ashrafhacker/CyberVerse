@@ -21,6 +21,7 @@ from sqlalchemy.sql import Select
 from app.api.deps import CurrentUser, require_roles
 from app.core.database import get_db
 from app.models.game import (
+    AttemptStatus,
     ChallengeAttempt,
     ChallengeSubmission,
     GameChallenge,
@@ -29,7 +30,8 @@ from app.models.game import (
     Tournament,
     TournamentRegistration,
 )
-from app.models.user import User, UserRole, UserStatus
+from app.models.progress import PlayerProgress
+from app.models.user import Profile, User, UserRole, UserStatus
 from app.schemas.base import APIResponse
 from app.schemas.game import (
     ArenaStatsResponse,
@@ -86,7 +88,7 @@ async def _paginate(db: AsyncSession, stmt: Select, page: int, page_size: int) -
     return list(rows), int(total or 0)
 
 
-def _challenge_out(challenge: GameChallenge) -> GameChallengeResponse:
+def _challenge_out(challenge: GameChallenge, author: dict | None = None) -> GameChallengeResponse:
     return GameChallengeResponse.model_validate(
         {
             "id": str(challenge.id),
@@ -94,16 +96,17 @@ def _challenge_out(challenge: GameChallenge) -> GameChallengeResponse:
             "slug": challenge.slug,
             "description": challenge.description,
             "category": challenge.category,
-            "difficulty": str(challenge.difficulty),
+            "difficulty": getattr(challenge.difficulty, "value", challenge.difficulty),
             "points": challenge.points,
             "xp": challenge.xp,
             "time_limit": challenge.time_limit,
-            "status": str(challenge.status),
+            "status": getattr(challenge.status, "value", challenge.status),
             "is_published": challenge.is_published,
             "flag_hash": challenge.flag_hash,
             "hints": list(challenge.hints or []),
             "environment_config": challenge.environment_config or {},
             "author_id": _str(challenge.author_id),
+            "author": author,
             "created_at": challenge.created_at,
             "updated_at": challenge.updated_at,
         }
@@ -117,7 +120,7 @@ def _attempt_out(attempt: ChallengeAttempt) -> ChallengeAttemptResponse:
             "challenge_id": str(attempt.challenge_id),
             "user_id": str(attempt.user_id),
             "team_id": _str(attempt.team_id),
-            "status": str(attempt.status),
+            "status": getattr(attempt.status, "value", attempt.status),
             "score": attempt.score,
             "xp_awarded": attempt.xp_awarded,
             "started_at": attempt.started_at,
@@ -138,7 +141,7 @@ def _tournament_out(tournament: Tournament) -> TournamentResponse:
             "max_players": tournament.max_players,
             "max_teams": tournament.max_teams,
             "rules": tournament.rules,
-            "status": str(tournament.status),
+            "status": getattr(tournament.status, "value", tournament.status),
             "season_id": _str(tournament.season_id),
             "created_by": _str(tournament.created_by),
             "registered_players": tournament.registered_players,
@@ -193,6 +196,27 @@ def _member_out(member: GameTeamMember) -> GameTeamMemberResponse:
     )
 
 
+async def _author_map(db: AsyncSession, author_ids: list) -> dict:
+    """Batch-load {author_id: {username, avatar}} for challenge responses."""
+    ids = [a for a in author_ids if a]
+    if not ids:
+        return {}
+    users = (
+        await db.execute(select(User).where(User.id.in_(ids)))
+    ).scalars().all()
+    profiles = (
+        await db.execute(select(Profile).where(Profile.user_id.in_(ids)))
+    ).scalars().all()
+    by_user = {p.user_id: p.username for p in profiles}
+    return {
+        u.id: {
+            "username": by_user.get(u.id) or u.email.split("@")[0],
+            "avatar": u.avatar_url,
+        }
+        for u in users
+    }
+
+
 async def _get_challenge(db: AsyncSession, slug: str) -> GameChallenge:
     challenge = (
         await db.execute(select(GameChallenge).where(GameChallenge.slug == slug))
@@ -226,9 +250,10 @@ async def list_challenges(
     stmt = stmt.order_by(GameChallenge.created_at.desc())
 
     challenges, total = await _paginate(db, stmt, page, page_size)
+    authors = await _author_map(db, [c.author_id for c in challenges])
     return APIResponse[GameChallengeListResponse](
         data=GameChallengeListResponse(
-            challenges=[_challenge_out(c) for c in challenges],
+            challenges=[_challenge_out(c, authors.get(c.author_id)) for c in challenges],
             total=total,
             page=page,
             page_size=page_size,
@@ -245,7 +270,8 @@ async def get_challenge(
     challenge = await _get_challenge(db, slug)
     if not challenge.is_published and challenge.author_id != user.id and user.role not in ADMIN_ROLES:
         raise HTTPException(status_code=404, detail="Challenge not found")
-    return APIResponse[GameChallengeResponse](data=_challenge_out(challenge))
+    authors = await _author_map(db, [challenge.author_id])
+    return APIResponse[GameChallengeResponse](data=_challenge_out(challenge, authors.get(challenge.author_id)))
 
 
 @router.post(
@@ -269,7 +295,8 @@ async def create_challenge(
     db.add(challenge)
     await db.commit()
     await db.refresh(challenge)
-    return APIResponse[GameChallengeResponse](data=_challenge_out(challenge))
+    authors = await _author_map(db, [challenge.author_id])
+    return APIResponse[GameChallengeResponse](data=_challenge_out(challenge, authors.get(challenge.author_id)))
 
 
 @router.patch("/challenges/{challenge_id}", response_model=APIResponse[GameChallengeResponse], summary="Update a challenge")
@@ -292,7 +319,8 @@ async def update_challenge(
     challenge.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(challenge)
-    return APIResponse[GameChallengeResponse](data=_challenge_out(challenge))
+    authors = await _author_map(db, [challenge.author_id])
+    return APIResponse[GameChallengeResponse](data=_challenge_out(challenge, authors.get(challenge.author_id)))
 
 
 @router.delete("/challenges/{challenge_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete a challenge")
@@ -388,12 +416,18 @@ async def submit_flag(
     )
 
     if correct:
-        attempt.status = "completed"
+        attempt.status = AttemptStatus.COMPLETED
         attempt.completed_at = datetime.now(UTC)
         attempt.score = challenge.points
         attempt.xp_awarded = challenge.xp
-        user.xp = (user.xp or 0) + challenge.xp
-        user.level = 1 + int(((user.xp or 0) / 1000) ** 0.5)
+        progress = (
+            await db.execute(select(PlayerProgress).where(PlayerProgress.user_id == user.id))
+        ).scalar_one_or_none()
+        if progress is None:
+            progress = PlayerProgress(user_id=user.id)
+            db.add(progress)
+        progress.total_xp = (progress.total_xp or 0) + challenge.xp
+        progress.current_level = 1 + int(((progress.total_xp or 0) / 1000) ** 0.5)
 
     await db.commit()
 
@@ -488,7 +522,7 @@ async def register_tournament(
     ).scalar_one_or_none()
     if not tournament:
         raise HTTPException(status_code=404, detail="Tournament not found")
-    if str(tournament.status) != "upcoming":
+    if getattr(tournament.status, "value", tournament.status) != "upcoming":
         raise HTTPException(status_code=400, detail="Tournament not open for registration")
 
     existing = (
@@ -507,6 +541,16 @@ async def register_tournament(
         team = (await db.execute(select(GameTeam).where(GameTeam.id == team_id))).scalar_one_or_none()
         if not team:
             raise HTTPException(status_code=404, detail="Team not found")
+        member = (
+            await db.execute(
+                select(GameTeamMember).where(
+                    GameTeamMember.team_id == team_id,
+                    GameTeamMember.user_id == user.id,
+                )
+            )
+        ).scalar_one_or_none()
+        if not member:
+            raise HTTPException(status_code=403, detail="You are not a member of this team")
 
     row = TournamentRegistration(tournament_id=tournament_id, user_id=user.id, team_id=team_id)
     db.add(row)

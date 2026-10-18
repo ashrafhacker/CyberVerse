@@ -108,7 +108,8 @@ async def get_optional_user(
     if not actual_token:
         return None
     try:
-        payload = decode_token(actual_token)
+        # Access tokens only: a refresh token must never pass as access here.
+        payload = decode_token(actual_token, expected_type="access")
         user_id = payload.get("sub")
         if not user_id:
             return None

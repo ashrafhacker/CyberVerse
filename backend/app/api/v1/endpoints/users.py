@@ -5,9 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import CurrentUser, require_admin, require_moderator
+from app.api.deps import ROLE_HIERARCHY, CurrentUser, require_admin, require_moderator, require_super_admin
 from app.core.database import get_db
-from app.models.user import User, UserStatus
+from app.models.user import User, UserRole, UserStatus
 from app.schemas.base import APIResponse, MessageResponse, PaginatedResponse
 
 router = APIRouter()
@@ -69,14 +69,25 @@ async def list_users(
 @router.get("/{user_id}", response_model=APIResponse[dict], summary="Get user by ID")
 async def get_user(
     user_id: UUID,
-    _: CurrentUser,
+    caller: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
+    # IDOR guard: ordinary users may only read their own record; staff
+    # (moderator+) may read any. Unknown IDs return 404 either way.
+    is_self = caller.id == user_id
+    is_staff = ROLE_HIERARCHY.get(caller.role, 0) >= ROLE_HIERARCHY[UserRole.MODERATOR]
+    if not is_self and not is_staff:
+        raise HTTPException(status_code=404, detail="User not found")
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return APIResponse[dict](data=_serialize_user(user))
+    data = _serialize_user(user)
+    if not is_staff:
+        # Self-service view: strip fields only staff need for moderation.
+        for field in ("email", "is_2fa_enabled", "last_login"):
+            data.pop(field, None)
+    return APIResponse[dict](data=data)
 
 
 @router.patch("/{user_id}/status", response_model=APIResponse[dict], summary="Update user status (admin)")
@@ -96,11 +107,11 @@ async def update_user_status(
     return APIResponse[dict](data=_serialize_user(user))
 
 
-@router.patch("/{user_id}/role", response_model=APIResponse[dict], summary="Update user role (admin)")
+@router.patch("/{user_id}/role", response_model=APIResponse[dict], summary="Update user role (super admin)")
 async def update_user_role(
     user_id: UUID,
     new_role: str,
-    _: User = Depends(require_admin),
+    current_user: User = Depends(require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     from app.models.user import UserRole
@@ -109,6 +120,9 @@ async def update_user_role(
         role = UserRole(new_role)
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid role: {new_role}")
+
+    if current_user.id == user_id:
+        raise HTTPException(status_code=400, detail="You cannot change your own role")
 
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()

@@ -43,6 +43,7 @@ class GameChallengeUpdate(BaseModel):
 class GameChallengeResponse(GameChallengeBase):
     id: str
     author_id: Optional[str] = None
+    author: Optional[dict] = None
     created_at: datetime
     updated_at: datetime
 

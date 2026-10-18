@@ -30,23 +30,8 @@ async def list_courses(
         page_size=page_size,
     )
 
-    items = [
-        {
-            "id": str(c.id),
-            "slug": c.slug,
-            "name": c.name,
-            "description": c.description,
-            "short_description": c.short_description,
-            "difficulty": c.difficulty.value if hasattr(c.difficulty, "value") else c.difficulty,
-            "estimated_hours": c.estimated_hours,
-            "thumbnail_url": c.thumbnail_url,
-            "is_premium": c.is_premium,
-            "tags": c.tags,
-        }
-        for c in courses
-    ]
-
-    data = PaginatedResponse.create(items, total, page, page_size)
+    # CourseService already returns JSON-safe dicts (ORM objects can't survive the cache)
+    data = PaginatedResponse.create(courses, total, page, page_size)
     return APIResponse[PaginatedResponse](data=data)
 
 
@@ -56,21 +41,7 @@ async def list_learning_paths(
     db: AsyncSession = Depends(get_db),
 ):
     paths = await CourseService.list_learning_paths(db)
-    return APIResponse[list](
-        data=[
-            {
-                "id": str(p.id),
-                "slug": p.slug,
-                "name": p.name,
-                "description": p.description,
-                "difficulty": p.difficulty.value if hasattr(p.difficulty, "value") else p.difficulty,
-                "estimated_hours": p.estimated_hours,
-                "is_premium": p.is_premium,
-                "order": p.order,
-            }
-            for p in paths
-        ]
-    )
+    return APIResponse[list](data=paths)
 
 
 @router.get("/{course_id_or_slug}", response_model=APIResponse[dict], summary="Get course with structure")

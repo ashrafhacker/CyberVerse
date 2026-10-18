@@ -75,6 +75,10 @@ class SOCService:
         incident = await db.get(SOCIncident, incident_id)
         if not incident:
             raise SOCError("Incident not found")
+        # Row-level access: only the owner (or a manager/moderator/admin) may read
+        # or modify an incident — prevents IDOR by UUID enumeration.
+        if incident.owner_id != user.id and user.role not in SOCService.MANAGER_ROLES:
+            raise SOCError("Incident not found")
         return incident
 
     @staticmethod

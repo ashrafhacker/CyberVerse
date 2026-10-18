@@ -66,15 +66,30 @@ async def test_daily_checkin_awards_bonus(client):
     assert second.json()["data"]["already_checked_in"] is True
 
 
-async def test_xp_award_updates_level_data(client):
+async def test_xp_award_updates_level_data(client, db_session):
+    from sqlalchemy import select
+
+    from app.models.user import User, UserRole
+
     headers = await _auth_headers(client, "p5@test.io", "p5_test")
-    response = await client.post("/api/v1/progress/xp?xp=250&coins=50", headers=headers)
+    # Students cannot mint XP on themselves (abuse fix): staff only.
+    denied = await client.post("/api/v1/progress/xp?xp=250&coins=50", headers=headers)
+    assert denied.status_code == 403
+
+    user = (await db_session.execute(select(User).where(User.email == "p5@test.io"))).scalar_one()
+    user.role = UserRole.ADMINISTRATOR
+    await db_session.commit()
+    login = await client.post(
+        "/api/v1/auth/login", json={"email": "p5@test.io", "password": "StrongPass123!"}
+    )
+    staff_headers = {"Authorization": f"Bearer {login.json()['data']['access_token']}"}
+    response = await client.post("/api/v1/progress/xp?xp=250&coins=50", headers=staff_headers)
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["xp_awarded"] == 250
     assert data["level"] >= 1
 
-    overview = await client.get("/api/v1/progress/overview", headers=headers)
+    overview = await client.get("/api/v1/progress/overview", headers=staff_headers)
     assert overview.json()["data"]["total_xp"] == 250
 
 

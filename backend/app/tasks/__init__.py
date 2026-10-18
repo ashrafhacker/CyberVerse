@@ -97,6 +97,44 @@ def send_password_reset_email(email: str, token: str) -> dict:
         structlog.get_logger(__name__).warning("email_skipped", email=email, error=str(exc))
         return {"email": email, "status": "skipped", "error": str(exc)}
 
+
+@shared_task(name="app.tasks.email_tasks.send_contact_notification")
+@shared_task(name="app.tasks.send_contact_notification")
+def send_contact_notification(name: str, email: str, subject: str, message: str) -> dict:
+    """Notify the support inbox about a public contact-form submission."""
+    from app.core.config import settings  # noqa: PLC0415
+
+    recipient = settings.CONTACT_FORM_RECIPIENT
+    try:
+        import sendgrid  # noqa: PLC0415
+        from sendgrid.helpers.mail import Mail  # noqa: PLC0415
+
+        sg = sendgrid.SendGridAPIClient(api_key=settings.SENDGRID_API_KEY)
+        message_html = (
+            f"<h2>New contact form submission</h2>"
+            f"<p><b>From:</b> {name} &lt;{email}&gt;</p>"
+            f"<p><b>Subject:</b> {subject}</p>"
+            f"<p><b>Message:</b></p><p>{message.replace(chr(10), '<br/>')}</p>"
+        )
+        mail_msg = Mail(
+            from_email=(settings.SENDGRID_FROM_EMAIL, settings.SENDGRID_FROM_NAME),
+            to_emails=recipient,
+            subject=f"[CyberVerse Contact] {subject}",
+            html_content=message_html,
+            reply_to=email,
+        )
+        response = sg.send(mail_msg)
+        return {"recipient": recipient, "status_code": response.status_code}
+    except Exception as exc:
+        import structlog  # noqa: PLC0415
+
+        # Never fail the visitor's request because email infra is down; the
+        # submission is already logged by the endpoint.
+        structlog.get_logger(__name__).warning(
+            "contact_email_skipped", subject=subject, error=str(exc)
+        )
+        return {"recipient": recipient, "status": "skipped", "error": str(exc)}
+
 # -------------------------------------------------------
 # Notification tasks (merged from notification_tasks.py)
 # -------------------------------------------------------

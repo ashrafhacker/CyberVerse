@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import CurrentUser
+from app.api.deps import CurrentUser, require_admin
 from app.core.database import get_db
 from app.models.progress import LessonProgress
 from app.schemas.base import APIResponse
@@ -191,9 +191,9 @@ async def daily_checkin(
     )
 
 
-@router.post("/xp", response_model=APIResponse[dict], summary="Award XP/coins (game server callback)")
+@router.post("/xp", response_model=APIResponse[dict], summary="Award XP/coins (staff only)")
 async def award_xp(
-    user: CurrentUser,
+    user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
     xp: int = 0,
     coins: int = 0,

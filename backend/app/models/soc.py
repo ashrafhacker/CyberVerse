@@ -10,7 +10,7 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -35,7 +35,7 @@ class SOCAlert(Base):
     status: Mapped[str] = mapped_column(String(20), default="new", nullable=False)
     mitre_technique_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
     event_details: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
-    timeline: Mapped[list] = mapped_column(ARRAY(JSONB), default=list, nullable=False)
+    timeline: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
@@ -70,8 +70,8 @@ class SOCIncident(Base):
     mitre_mapping: Mapped[list] = mapped_column(FlexibleArray(str), default=list, nullable=False)
     affected_assets: Mapped[list] = mapped_column(FlexibleArray(str), default=list, nullable=False)
     evidence_ids: Mapped[list] = mapped_column(FlexibleArray(str), default=list, nullable=False)
-    analyst_notes: Mapped[list] = mapped_column(ARRAY(JSONB), default=list, nullable=False)
-    timeline: Mapped[list] = mapped_column(ARRAY(JSONB), default=list, nullable=False)
+    analyst_notes: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
+    timeline: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
     root_cause: Mapped[str | None] = mapped_column(Text, nullable=True)
     containment_actions: Mapped[list] = mapped_column(FlexibleArray(str), default=list, nullable=False)
     remediation_plan: Mapped[str | None] = mapped_column(Text, nullable=True)
