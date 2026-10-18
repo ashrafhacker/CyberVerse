@@ -9,7 +9,7 @@ Target architecture (per project brief):
 | Database   | Neon (us-east-1)    | **Migrated & verified** — `cyberverse` DB, 75 tables, head=`0007_library_enum_names` |
 | Cache/jobs | Render Redis (default) or Upstash | Config via `REDIS_URL`/`CELERY_*` — no Upstash creds present |
 | Assets     | Cloudflare R2       | **Blocked** — no R2 credentials on this machine              |
-| Auth       | First-party JWT     | Verified E2E locally (login, rotation, RBAC, admin paths)    |
+| Auth       | Clerk (RS256 session tokens) | **Migrated + unit-tested**; legacy HS256 JWTs still accepted during transition |
 | Email      | SendGrid (existing) | Key present in local `.env`; delivery **not verified**       |
 | Monitoring | Sentry              | **Not configured** — DSN in `.env` is a placeholder          |
 
@@ -145,5 +145,5 @@ These cannot be created from this machine (no GitHub write access — see §1).
 | Cloudflare R2 | Blocked | Needs `R2_ACCOUNT_ID`/keys; `backend/.env.r2.example` documents the shape. Existing `cyberverse-assets` bucket must be reconciled by checksum before any upload — no bulk upload performed |
 | Sentry | Not configured | Replace placeholder DSN in backend env |
 | SendGrid delivery | Configured, not verified | Send one test message to an authorized recipient after setting the key in Render |
-| Clerk | Not applicable | First-party JWT auth is implemented and verified; no second identity system introduced |
+| Clerk | Configured, dashboard step pending | Backend verifies RS256 session tokens (JWKS), syncs users via `/auth/me` lazy provision + `POST /api/v1/auth/clerk/webhook`. Set `CLERK_PUBLISHABLE_KEY`/`CLERK_SECRET_KEY` in Render, then in **Clerk Dashboard → Webhooks** add endpoint `https://cyberverse-api.onrender.com/api/v1/auth/clerk/webhook` with the `whsec_…` secret placed in `CLERK_WEBHOOK_SECRET`. Events: `user.created`, `user.updated`, `user.deleted`. Switch the instance to **production keys** (`pk_live_`/`sk_live_`) before launch |
 | Resend | Not applicable | SendGrid is the configured provider |
