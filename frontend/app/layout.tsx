@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { ClerkProvider } from '@clerk/nextjs';
 import { AuthProvider } from '@/lib/auth';
 import { ToastProvider } from '@/lib/toast';
 import CookieConsent from '@/components/CookieConsent';
@@ -112,12 +113,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             }),
           }}
         />
-        <AuthProvider>
-          <ToastProvider>
-            {children}
-            <CookieConsent />
-          </ToastProvider>
-        </AuthProvider>
+        <ClerkProvider>
+          <AuthProvider>
+            <ToastProvider>
+              {children}
+              <CookieConsent />
+            </ToastProvider>
+          </AuthProvider>
+        </ClerkProvider>
       </body>
     </html>
   );

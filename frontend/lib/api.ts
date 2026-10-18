@@ -105,6 +105,15 @@ let failureCount = 0;
 let circuitOpenUntil = 0;
 let refreshPromise: Promise<string | null> | null = null;
 
+// Pluggable token refresher. When set (by the Clerk-backed AuthProvider) a 401
+// triggers this instead of the legacy /auth/refresh call — Clerk owns sessions.
+let tokenRefresher: (() => Promise<string | null>) | null = null;
+
+/** Register an async function that returns a fresh access token (e.g. Clerk's getToken). */
+export function setTokenRefresher(fn: (() => Promise<string | null>) | null): void {
+  tokenRefresher = fn;
+}
+
 // In-flight dedup map
 const inflight = new Map<string, Promise<unknown>>();
 
@@ -187,6 +196,24 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = REQU
 // ---------------------------------------------------------------------------
 
 async function refreshAccessToken(): Promise<string | null> {
+  // Clerk-backed flow: delegate to the registered refresher (Clerk getToken).
+  if (tokenRefresher) {
+    try {
+      const fresh = await tokenRefresher();
+      if (fresh) {
+        const { refresh } = getTokens();
+        setTokens(fresh, refresh ?? '');
+        failureCount = 0;
+        return fresh;
+      }
+      clearTokens();
+      return null;
+    } catch {
+      clearTokens();
+      return null;
+    }
+  }
+
   if (refreshPromise) return refreshPromise;
 
   refreshPromise = (async () => {
