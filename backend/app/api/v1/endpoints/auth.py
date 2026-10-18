@@ -525,8 +525,15 @@ def _verify_svix_signature(secret: str, svix_id: str, svix_timestamp: str, paylo
     # base64-DECODED bytes after the prefix, not the raw string.
     key = secret.encode()
     if secret.startswith("whsec_"):
+        raw = secret[len("whsec_"):]
         try:
-            key = base64.b64decode(secret[len("whsec_"):])
+            decoded = base64.b64decode(raw)
+            # Canonical round-trip check: b64decode leniency differs across
+            # Python versions (≤3.12 silently ignores bytes after the final
+            # padding), so only accept the decoded key when it re-encodes to
+            # exactly the original text. Non-canonical secrets fall back to
+            # their raw bytes instead of accidentally matching the real key.
+            key = decoded if base64.b64encode(decoded).decode() == raw else secret.encode()
         except Exception:  # noqa: BLE001 — malformed secret; fall back to raw
             key = secret.encode()
 

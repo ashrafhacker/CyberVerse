@@ -381,9 +381,16 @@ def test_svix_signature_rejects_tampering_and_wrong_secret():
     assert not _verify_svix_signature(
         secret, "msg_1", ts, payload + "x", f"v1,{sig}"
     )
-    # Wrong secret.
+    # Wrong secret — genuinely different key material.
+    wrong_secret = "whsec_" + base64.b64encode(b"fedcba9876543210fedcba9876543210").decode()
     assert not _verify_svix_signature(
-        _whsec() + "x", "msg_1", ts, payload, f"v1,{sig}"
+        wrong_secret, "msg_1", ts, payload, f"v1,{sig}"
+    )
+    # Non-canonical secret (bytes after the base64 padding). b64decode
+    # leniency differs by Python version — ≤3.12 silently drops the trailing
+    # bytes, which used to make this "wrong" secret decode to the REAL key.
+    assert not _verify_svix_signature(
+        secret + "x", "msg_1", ts, payload, f"v1,{sig}"
     )
     # Wrong svix-id.
     assert not _verify_svix_signature(secret, "msg_2", ts, payload, f"v1,{sig}")
