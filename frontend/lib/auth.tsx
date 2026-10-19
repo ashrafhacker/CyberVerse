@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -114,10 +115,15 @@ export function useRequireAuth() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  // Guard against redirect storms: only issue the redirect once per mount even
+  // if `user` stays null (e.g. backend /auth/me failing), which previously
+  // caused the tab to blink between /login and the protected page.
+  const redirectedRef = useRef(false);
 
   useEffect(() => {
     if (loading) return;
-    if (!user) {
+    if (!user && !redirectedRef.current) {
+      redirectedRef.current = true;
       const search = typeof window !== 'undefined' ? window.location.search : '';
       const target = `${pathname}${search}`;
       saveRedirectTarget(target);
