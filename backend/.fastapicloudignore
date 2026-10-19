@@ -1,0 +1,27 @@
+# FastAPI Cloud deploy ignores — takes precedence over .gitignore.
+# Keep secrets, virtualenvs and caches out of every upload.
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.pem
+*.key
+*.p12
+*.pfx
+uploads/
+logs/
+*.log
+.DS_Store

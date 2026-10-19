@@ -35,6 +35,9 @@ next-env.d.ts
 *.p12
 *.pfx
 
+# FastAPI Cloud project link
+.fastapicloud/
+
 # Logs
 *.log
 logs/
