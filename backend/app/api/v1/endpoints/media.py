@@ -28,10 +28,14 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[6]
 ASSETS_ROOT = _PROJECT_ROOT / "assets" / "courses"
 ALLOWED_EXTENSIONS = {".mp4", ".pdf"}
 _ASSET_COURSE_SLUGS = {
-    "ceh-v12": "ceh-v12-official-modules",
-    "ceh-v12-specialization": "ceh-v12-system-and-network-security",
-    "hands-on-hacking/burp-suite": "burp-suite-live-practical",
-    "hands-on-hacking/http-debugger": "http-debugger-pro",
+    # Slugs must match courses.slug as written by backend/seed_courses.py —
+    # the older slugs from database/seeds/learning_paths_seed.sql (e.g.
+    # "ceh-v12-official-modules") never reached the live database.
+    "ceh-v12": "course-ceh-pdf-modules",
+    "ceh-v12-specialization": "course-ceh-system-network",
+    "hands-on-hacking/burp-suite": "course-burp-suite",
+    "hands-on-hacking/http-debugger": "course-http-debugger",
+    "hands-on-hacking/bonus": "course-http-debugger",
 }
 
 
