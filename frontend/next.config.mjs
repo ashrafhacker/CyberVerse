@@ -32,18 +32,41 @@ const nextConfig = {
     // from its own origins, so those hosts must be allowlisted or the client
     // throws ClerkRuntimeError: failed_to_load_clerk_js. The array covers both
     // production (clerk.com) and development FAPI (*.clerk.accounts.dev).
-    const clerkOrigins = [
-      'https://clerk.com',
-      'https://*.clerk.com',
-      'https://*.clerk.accounts.dev',
-      // NEXT_PUBLIC_CLERK_JS_URL escape hatch: when set, clerk-js is served
-      // from an alternate CDN (e.g. jsDelivr). Its origin must be in
-      // script-src or the overridden bundle is blocked by CSP. Only added at
-      // build time when the env var is present — no effect otherwise.
-      ...(process.env.NEXT_PUBLIC_CLERK_JS_URL
-        ? [new URL(process.env.NEXT_PUBLIC_CLERK_JS_URL).origin]
-        : []),
-    ].join(' ');
+    // Derive the instance's own Clerk Frontend API origin from the publishable
+    // key so *any* instance is allowlisted without editing this file:
+    // development (*.clerk.accounts.dev) and, crucially, production on a custom
+    // domain (clerk.<yourdomain> + the hosted portal at accounts.<yourdomain>).
+    // The key's middle segment is base64("<frontend-api-host>$").
+    const clerkPkOrigins = (() => {
+      try {
+        const b64 = (process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? '').split('_')[2] ?? '';
+        if (!b64) return [];
+        const host = Buffer.from(b64, 'base64').toString('utf8').replace(/\$$/, '');
+        if (!host) return [];
+        const origins = [`https://${host}`];
+        // Production FAPI is clerk.<domain>; the hosted Account Portal is
+        // accounts.<domain>. Allowlist the portal too when that shape applies.
+        if (host.startsWith('clerk.')) origins.push(`https://accounts.${host.slice('clerk.'.length)}`);
+        return origins;
+      } catch {
+        return [];
+      }
+    })();
+    const clerkOrigins = Array.from(
+      new Set([
+        'https://clerk.com',
+        'https://*.clerk.com',
+        'https://*.clerk.accounts.dev',
+        ...clerkPkOrigins,
+        // NEXT_PUBLIC_CLERK_JS_URL escape hatch: when set, clerk-js is served
+        // from an alternate CDN (e.g. jsDelivr). Its origin must be in
+        // script-src or the overridden bundle is blocked by CSP. Only added at
+        // build time when the env var is present — no effect otherwise.
+        ...(process.env.NEXT_PUBLIC_CLERK_JS_URL
+          ? [new URL(process.env.NEXT_PUBLIC_CLERK_JS_URL).origin]
+          : []),
+      ]),
+    ).join(' ');
     const csp = [
       "default-src 'self'",
       `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${clerkOrigins}`,
