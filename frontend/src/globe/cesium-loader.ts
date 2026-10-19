@@ -157,14 +157,6 @@ export async function preloadCesiumAssets(): Promise<void> {
     cssLink.href = '/cesium/Widgets/widgets.css';
     cssLink.as = 'style';
     document.head.appendChild(cssLink);
-    
-    // Preload Cesium worker
-    const workerLink = document.createElement('link');
-    workerLink.rel = 'preload';
-    workerLink.href = '/cesium/Workers/cesiumWorkerBootstrapper.js';
-    workerLink.as = 'script';
-    workerLink.crossOrigin = 'anonymous';
-    document.head.appendChild(workerLink);
   } catch {
     // Ignore preload errors
   }

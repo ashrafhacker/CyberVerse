@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+'use client';
+
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { CyberverseLayers, CyberEntityOptions } from './CyberverseLayers';
-import { useGlobe } from './useGlobe';
+import type { GlobeContextValue } from './useGlobe';
 import { GlobeAPI, ThreatIntelData, SOCData, NetworkTopologyData, LabEnvironmentData } from './api';
 
 export interface LayerState {
@@ -13,8 +15,17 @@ export interface LayerState {
   vulnerabilityHeatmap: boolean;
 }
 
-export function useCyberverseLayers() {
-  const { controls, ready } = useGlobe();
+/**
+ * Shared Cyberverse layer store.
+ *
+ * Takes the globe store as an argument (rather than calling `useGlobe()`) so a
+ * single provider can wire the two together. Previously each consumer created
+ * its own store, which meant the page and the layer panel ran two independent
+ * `CyberverseLayers` managers over the same viewer — "Clear All Layers" only
+ * cleared the panel's entities and the two `layerState`s diverged.
+ */
+export function useCyberverseLayersStore(globe: GlobeContextValue) {
+  const { controls, ready } = globe;
   const layersRef = useRef<CyberverseLayers | null>(null);
   const [layerState, setLayerState] = useState<LayerState>({
     threatIntel: false,
@@ -26,12 +37,18 @@ export function useCyberverseLayers() {
     vulnerabilityHeatmap: false,
   });
   const [loading, setLoading] = useState<Record<string, boolean>>({});
+  // Mirrors `layersRef.current` in state so consumers actually re-render once the
+  // layer manager exists. Creating it only inside the effect would leave `ready`
+  // false until some unrelated state change happened to re-render the tree — the
+  // header stayed on "○ LOADING" and the panel on "Initializing Globe...".
+  const [layersReady, setLayersReady] = useState(false);
 
   useEffect(() => {
     if (ready && controls) {
       const viewer = controls.getViewer();
       if (viewer && !layersRef.current) {
         layersRef.current = new CyberverseLayers(viewer);
+        setLayersReady(true);
       }
     }
   }, [ready, controls]);
@@ -308,14 +325,30 @@ export function useCyberverseLayers() {
     });
   }, []);
 
-  return {
-    layers: layersRef.current,
-    layerState,
-    loading,
-    toggleLayer,
-    loadNetworkTopology,
-    loadLabEnvironment,
-    clearAll,
-    ready: ready && !!layersRef.current,
-  };
+  return useMemo(
+    () => ({
+      layers: layersRef.current,
+      layerState,
+      loading,
+      toggleLayer,
+      loadNetworkTopology,
+      loadLabEnvironment,
+      clearAll,
+      ready: ready && layersReady,
+    }),
+    [layerState, loading, toggleLayer, loadNetworkTopology, loadLabEnvironment, clearAll, ready, layersReady],
+  );
+}
+
+export type CyberverseLayersValue = ReturnType<typeof useCyberverseLayersStore>;
+
+export const CyberverseLayersContext = createContext<CyberverseLayersValue | null>(null);
+
+/** Consume the shared Cyberverse layer store. Must be inside `<CyberverseGlobeProvider>`. */
+export function useCyberverseLayers(): CyberverseLayersValue {
+  const value = useContext(CyberverseLayersContext);
+  if (!value) {
+    throw new Error('useCyberverseLayers() must be used within <CyberverseGlobeProvider>.');
+  }
+  return value;
 }

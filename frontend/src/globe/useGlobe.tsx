@@ -1,4 +1,6 @@
-import { useCallback, useRef, useState } from 'react';
+'use client';
+
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import * as Cesium from 'cesium';
 
 export interface GlobeControls {
@@ -15,14 +17,38 @@ export interface GlobeControls {
   onEntityClick: (callback: (entity: any) => void) => () => void;
 }
 
-export function useGlobe(): { controls: GlobeControls | null; ready: boolean; registerComponents: (components: any) => void } {
+export interface GlobeContextValue {
+  controls: GlobeControls | null;
+  ready: boolean;
+  registerComponents: (components: any) => void;
+}
+
+/**
+ * Single source of truth for the Cesium viewer handoff.
+ *
+ * The component that builds the viewer (`GlobeViewerClient`) calls
+ * `registerComponents`; every other consumer (`useCyberverseLayers`, the layer
+ * panel, the page header) reads `ready`/`controls` from the same store.
+ *
+ * This used to be a plain hook, so each `useGlobe()` call owned its own refs
+ * and `ready` flag. `registerComponents` then only updated the caller's copy —
+ * the header stayed on "○ LOADING" and layer toggles were inert because the
+ * consumers were watching a store that was never registered. It now lives in
+ * one place and is shared through `<CyberverseGlobeProvider>`; use `useGlobe()`
+ * below to consume it.
+ */
+export function useGlobeStore(): GlobeContextValue {
   const viewerRef = useRef<any>(null);
   const sceneRef = useRef<any>(null);
   const controlsRef = useRef<any>(null);
   const [ready, setReady] = useState(false);
 
   const registerComponents = useCallback((components: any) => {
-    viewerRef.current = components.viewer;
+    // The viewer can arrive either at the top level or bundled inside `scene`
+    // (the gods-eye-view caller passes `{ scene: { viewer, ... } }`). Resolve
+    // both shapes — `getViewer()` below is what the layer manager waits on, and
+    // a missing viewer silently left the header stuck on "○ LOADING".
+    viewerRef.current = components.viewer ?? components.scene?.viewer ?? null;
     sceneRef.current = components.scene;
     controlsRef.current = components.controls;
     setReady(true);
@@ -102,21 +128,52 @@ export function useGlobe(): { controls: GlobeControls | null; ready: boolean; re
     return removeCallback;
   }, []);
 
-  const controls = ready
-    ? {
-        flyTo,
-        flyToEntity,
-        trackEntity,
-        untrackEntity,
-        toggleLayer,
-        getLayerState,
-        setVisualStyle,
-        resetGlobe,
-        getViewer,
-        getScene,
-        onEntityClick,
-      }
-    : null;
+  // Memoised so the context value identity is stable across renders that don't
+  // actually change the viewer state — otherwise every consumer would re-render
+  // (and the globe would re-initialise) on unrelated parent updates.
+  const controls = useMemo<GlobeControls | null>(
+    () =>
+      ready
+        ? {
+            flyTo,
+            flyToEntity,
+            trackEntity,
+            untrackEntity,
+            toggleLayer,
+            getLayerState,
+            setVisualStyle,
+            resetGlobe,
+            getViewer,
+            getScene,
+            onEntityClick,
+          }
+        : null,
+    [
+      ready,
+      flyTo,
+      flyToEntity,
+      trackEntity,
+      untrackEntity,
+      toggleLayer,
+      getLayerState,
+      setVisualStyle,
+      resetGlobe,
+      getViewer,
+      getScene,
+      onEntityClick,
+    ],
+  );
 
-  return { controls, ready, registerComponents };
+  return useMemo(() => ({ controls, ready, registerComponents }), [controls, ready, registerComponents]);
+}
+
+export const GlobeContext = createContext<GlobeContextValue | null>(null);
+
+/** Consume the shared globe store. Must be inside `<CyberverseGlobeProvider>`. */
+export function useGlobe(): GlobeContextValue {
+  const value = useContext(GlobeContext);
+  if (!value) {
+    throw new Error('useGlobe() must be used within <CyberverseGlobeProvider>.');
+  }
+  return value;
 }

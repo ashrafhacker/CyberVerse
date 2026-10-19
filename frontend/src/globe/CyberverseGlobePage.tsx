@@ -6,6 +6,12 @@ import { GlobeLayerPanel } from './GlobeLayerPanel';
 import { useCyberverseLayers } from './useCyberverseLayers';
 import CesiumPreloader from './CesiumPreloader';
 
+// Hoisted so the reference is stable across renders. An inline array literal
+// here would create a new reference every time the page re-renders (which now
+// happens whenever the shared globe/layer context updates), and
+// GlobeViewerClient's init effect depends on the identity of this prop.
+const INITIAL_LAYERS = ['flights', 'satellites', 'earthquakes'];
+
 export function CyberverseGlobePage() {
   const [labId, setLabId] = useState<string>('');
   const { loadLabEnvironment, loadNetworkTopology, layerState, toggleLayer, ready } = useCyberverseLayers();
@@ -69,7 +75,7 @@ export function CyberverseGlobePage() {
       <main className="pt-16 h-screen relative">
         <div className="absolute inset-0">
           <CyberverseGlobe
-            initialLayers={['flights', 'satellites', 'earthquakes']}
+            initialLayers={INITIAL_LAYERS}
             style={{ width: '100%', height: '100%' }}
           />
         </div>

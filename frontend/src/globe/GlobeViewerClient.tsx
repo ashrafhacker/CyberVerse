@@ -21,8 +21,21 @@ export function GlobeViewerClient({
   const creditRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<Error | null>(null);
   const applicationRef = useRef<any>(null);
-  const { registerComponents, ready } = useGlobe();
+  const { registerComponents } = useGlobe();
   const { loadCesium, isReady: cesiumReady, isLoading: cesiumLoading, error: cesiumError } = useCesium();
+
+  // Keep the latest callbacks/props in refs so the Cesium init effect below can
+  // run exactly once. Depending on these directly re-ran initialisation whenever
+  // a parent re-rendered — which now happens on every shared-context update and
+  // would tear down and rebuild the viewer in a loop.
+  const onReadyRef = useRef(onReady);
+  const onErrorRef = useRef(onError);
+  const initialLayersRef = useRef(initialLayers);
+
+  useEffect(() => {
+    onReadyRef.current = onReady;
+    onErrorRef.current = onError;
+  });
 
   useEffect(() => {
     preloadCesiumAssets();
@@ -35,6 +48,11 @@ export function GlobeViewerClient({
     const cesiumToken = process.env.NEXT_PUBLIC_CESIUM_ION_TOKEN;
 
     let mounted = true;
+    // Real application-lifetime signal. The gods-eye-view core requires an
+    // AbortSignal (it calls `signal.addEventListener` / `AbortSignal.any`), so a
+    // plain stub object is not sufficient. Aborting on unmount lets the stack
+    // dispose its listeners.
+    const controller = new AbortController();
 
     const initializeGlobe = async () => {
       try {
@@ -92,20 +110,19 @@ export function GlobeViewerClient({
         const { createApplicationRequestServices } = await import('./gods-eye-view/services/requests.js');
         const operations = createApplicationOperations({
           requests: createApplicationRequestServices(),
-          signal: { throwIfAborted: () => {}, aborted: false } as any,
+          signal: controller.signal,
           eventTarget: globalThis.window,
         });
 
-        // Initialize catalog and controls
+        // Initialize catalog and place search
         const { createStandaloneCatalog } = await import('./gods-eye-view/standalone/catalog.js');
-        const { createStandaloneControls } = await import('./gods-eye-view/standalone/controls.js');
         const { createStandalonePlaceSearch } = await import('./gods-eye-view/standalone/placeSearch.js');
         const { CITY_POIS } = await import('./gods-eye-view/locations.js');
 
         const placeSearch = createStandalonePlaceSearch({
           presets: CITY_POIS,
           resolveApiKey: () => googleApiKey,
-          signal: { throwIfAborted: () => {}, aborted: false } as any,
+          signal: controller.signal,
         } as any);
 
         const catalog = createStandaloneCatalog({
@@ -116,27 +133,28 @@ export function GlobeViewerClient({
               placeSearch,
               { budgetMs: Infinity },
             ),
-          signal: { throwIfAborted: () => {}, aborted: false } as any,
+          signal: controller.signal,
           surface: operations.surface,
         } as any);
 
-        const controls = createStandaloneControls({
-          viewer,
-          scene: operations,
-          loaderStatus: null,
-          placeSearch,
-          catalog,
-        });
+        // The gods-eye-view controls (StyleManager + its ~150-node HUD shell) are
+        // intentionally NOT mounted inside the CyberVerse page: this globe is a
+        // custom integration that drives its layers through useCyberverseLayers
+        // (see CyberverseLayers), and no gods-eye-view HUD CSS is loaded here.
+        // The rest of the app only needs `controls` as a handle onto the viewer.
+        const controls = {
+          getViewer: () => viewer,
+          getScene: () => viewer.scene,
+        };
 
-        registerComponents({ scene: { viewer, tileset, operations }, controls, catalog, placeSearch });
+        registerComponents({ viewer, scene: { viewer, tileset, operations }, controls, catalog, placeSearch });
         
         setError(null);
-        if (onReady) {
-          onReady(viewer);
-        }
+        onReadyRef.current?.(viewer);
 
-        if (initialLayers.length > 0 && controls) {
-          initialLayers.forEach((layer) => {
+        const layersToEnable = initialLayersRef.current;
+        if (layersToEnable.length > 0) {
+          layersToEnable.forEach((layer) => {
             (controls as any).toggleLayer?.(layer, true);
           });
         }
@@ -144,7 +162,7 @@ export function GlobeViewerClient({
         if (!mounted) return;
         const describedError = new Error(describeError(err));
         setError(describedError);
-        onError?.(describedError);
+        onErrorRef.current?.(describedError);
       }
     };
 
@@ -152,9 +170,10 @@ export function GlobeViewerClient({
 
     return () => {
       mounted = false;
+      controller.abort();
       applicationRef.current?.viewer?.destroy?.().catch(console.error);
     };
-  }, [initialLayers, onReady, onError, loadCesium, registerComponents]);
+  }, [loadCesium, registerComponents]);
 
   if (error) {
     return (
