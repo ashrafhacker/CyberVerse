@@ -1,1 +1,3 @@
 .originkit/
+.vercel
+.env*
