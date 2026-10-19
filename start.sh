@@ -21,8 +21,14 @@ cd ..
 
 echo "== frontend (production build) =="
 cd frontend
-NEXT_TELEMETRY_DISABLED=1 nohup ./node_modules/.bin/next start \
-  --port 3000 --hostname 127.0.0.1 \
+# `output: 'standalone'` does NOT copy public/ or .next/static into the
+# standalone bundle — do it here, or every /_next/static chunk 404s and the
+# page never hydrates. (next start can't be used with standalone output.)
+rm -rf .next/standalone/public .next/standalone/.next/static
+cp -r public .next/standalone/public
+cp -r .next/static .next/standalone/.next/static
+set -a && . ./.env.local && set +a
+NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3000 nohup node ./.next/standalone/server.js \
   > /tmp/opencode/cyberverse-frontend.log 2>&1 &
 cd ..
 
