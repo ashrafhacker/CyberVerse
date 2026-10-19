@@ -196,11 +196,14 @@ jobs:
     needs: [build-images, security-scan]
     if: github.ref == 'refs/heads/develop'
     environment: staging
+    env:
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - name: Deploy backend to Render
+        if: env.RENDER_API_KEY != ''
         env:
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_SERVICE_ID: ${{ secrets.RENDER_STAGING_BACKEND_ID }}
         run: |
           curl -X POST "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" \
@@ -208,10 +211,13 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{}'
       - name: Deploy frontend to Vercel
+        if: env.VERCEL_TOKEN != ''
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+        # Deploy from repo root: the Vercel project's Root Directory setting
+        # is "frontend", so the upload must contain the frontend/ subdir.
         run: npx vercel --prod --yes --token $VERCEL_TOKEN --scope $VERCEL_ORG_ID
 
   deploy-production:
@@ -240,7 +246,8 @@ jobs:
             -d '{}'
       - name: Deploy frontend to Vercel
         if: env.VERCEL_TOKEN != ''
-        working-directory: frontend
+        # Deploy from repo root: the Vercel project's Root Directory setting
+        # is "frontend", so the upload must contain the frontend/ subdir.
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
