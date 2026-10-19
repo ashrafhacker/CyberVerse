@@ -1,3 +1,60 @@
+/**
+ * Production-only bundler repair: illegal legacy octal escapes.
+ *
+ * cesium@1.145 pulls in @cesium/engine@26.3 -> @spz-loader/core@0.3.1, whose
+ * Emscripten build inlines the raw .wasm binary as a JS *template literal*.
+ * The raw dependency is valid, but the production minifier serialises NUL bytes
+ * as `\0`; when a NUL byte is immediately followed by a digit character the
+ * result is `\0<digit>` — an illegal legacy octal escape inside an (untagged)
+ * template literal. The browser then throws a SyntaxError and refuses to parse
+ * the whole chunk, which tripped the /globe error boundary in production only
+ * (dev/Turbopack is unminified, so it never showed there).
+ *
+ * We repair the emitted chunks: only `\0` (NUL) that directly precedes a digit
+ * is rewritten to the unambiguous `\x00`. The leading-backslash parity check
+ * (`(?:\\\\)*`) makes sure an already-escaped backslash (`"\\0"`) is left alone.
+ * Non-template/regex uses of `\0<digit>` are vanishingly rare and `\x00` is
+ * semantically identical (NUL) wherever it is legal.
+ */
+function fixLegacyOctalEscapes(source) {
+  let fixed = 0;
+  const out = source.replace(/([^\\]|^)((?:\\\\)*)\\0(?=[0-9])/g, (_match, pre, pairs) => {
+    fixed += 1;
+    return `${pre}${pairs}\\x00`;
+  });
+  return { out, fixed };
+}
+
+class FixLegacyOctalEscapesPlugin {
+  apply(compiler) {
+    const { webpack } = compiler;
+    const { RawSource } = webpack.sources;
+    compiler.hooks.thisCompilation.tap('FixLegacyOctalEscapesPlugin', (compilation) => {
+      compilation.hooks.processAssets.tap(
+        {
+          name: 'FixLegacyOctalEscapesPlugin',
+          // After minification, before [contenthash] substitution, so the
+          // repaired bytes are what the emitted filename hashes.
+          stage: webpack.Compilation.PROCESS_ASSETS_STAGE_SUMMARIZE,
+        },
+        () => {
+          for (const asset of compilation.getAssets()) {
+            if (!asset.name.endsWith('.js')) continue;
+            const { out, fixed } = fixLegacyOctalEscapes(asset.source.source().toString());
+            if (fixed > 0) {
+              compilation.updateAsset(asset.name, new RawSource(out));
+              // eslint-disable-next-line no-console
+              console.log(
+                `[fix-legacy-octal-escapes] repaired ${fixed} illegal escape(s) in ${asset.name}`,
+              );
+            }
+          }
+        },
+      );
+    });
+  }
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -120,5 +177,15 @@ const nextConfig = {
     ignoreBuildErrors: false,
   },
 };
+
+// The repair is only meaningful for minified production webpack output. Gating
+// on NODE_ENV keeps `next dev --turbopack` free of the "Webpack is configured
+// while Turbopack is not" warning by not defining a webpack config at all in dev.
+if (process.env.NODE_ENV === 'production') {
+  nextConfig.webpack = (config) => {
+    config.plugins.push(new FixLegacyOctalEscapesPlugin());
+    return config;
+  };
+}
 
 export default nextConfig;
