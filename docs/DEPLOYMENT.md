@@ -1,15 +1,19 @@
 # CyberVerse — Deployment Runbook
 
-Target architecture (per project brief):
+> **Status as of 2026-10-19** — the stack is live except the backend, which is
+> blocked on Render billing (one dashboard action, see §6).
+
+Target architecture:
 
 | Layer      | Provider            | State                                                        |
 | ---------- | ------------------- | ------------------------------------------------------------ |
-| Frontend   | Vercel              | CLI auth OK, but account **suspended (billing)** — deploy blocked |
-| Backend    | Render              | `render.yaml` blueprint ready — **blocked on Render account** |
-| Database   | Neon (us-east-1)    | **Migrated & verified** — `cyberverse` DB, 75 tables, head=`0007_library_enum_names` |
-| Cache/jobs | Render Redis (default) or Upstash | Config via `REDIS_URL`/`CELERY_*` — no Upstash creds present |
+| Frontend   | Vercel (team `neohacker-proejects`, project `cyberverse`) | **Live** — https://cyberverse-neohacker-proejects.vercel.app (also `cyberverse-beta.vercel.app`). CI deploys on every push to `main`. |
+| Backend    | Render              | Service **not created** — API creation reaches HTTP 402 (payment info required). Script ready, see §6. |
+| Database   | Neon (us-east-1)    | **Live & verified** — project `crimson-firefly-97189410`, branch `cyberverse-production`, DB `cyberverse`, 75 tables, head=`0007_library_enum_names`. The unrelated `neondb` DB is untouched. |
+| Cache/jobs | Render Redis (default) or Upstash | Config via `REDIS_URL`/`CELERY_*` — created with the Render service; no Upstash creds present |
+| Git       | GitHub `ashrafhacker/CyberVerse` (public) | **Live** — `main` = `221665f`, pushed over HTTPS with the `gh` keyring token (`gh auth setup-git`) |
 | Assets     | Cloudflare R2       | **Blocked** — no R2 credentials on this machine              |
-| Auth       | Clerk (RS256 session tokens) | **Migrated + unit-tested**; legacy HS256 JWTs still accepted during transition |
+| Auth       | Clerk (RS256 session tokens) | **Live** — instance `suited-vervet-3663` (`pk_test_…`); switch to `pk_live_`/`sk_live_` before real launch |
 | Email      | SendGrid (existing) | Key present in local `.env`; delivery **not verified**       |
 | Monitoring | Sentry              | **Not configured** — DSN in `.env` is a placeholder          |
 
@@ -18,24 +22,32 @@ Target architecture (per project brief):
 ## 1. What is already provisioned (Verified)
 
 ### Neon PostgreSQL — `cyberverse` database
-- Existing Neon project `ep-nameless-glade-...us-east-1.aws.neon.tech` reused; **no new project created**.
+- Neon project `crimson-firefly-97189410` ("neohacker51"), branch
+  `cyberverse-production`, endpoint `ep-silent-art-anexjm85.c-6.us-east-1.aws.neon.tech`.
+  **No new project created.**
 - The default `neondb` database contains an unrelated chat-app schema (89 users) — **left untouched**.
 - A separate `cyberverse` database was created (additive, non-destructive) and migrated:
   - `alembic upgrade head` → `0007_library_enum_names`, **75 tables**.
   - `app/core/config.py` remaps libpq-only URL params (`sslmode` → asyncpg `ssl`, drops `channel_binding`) so the Neon console connection string works as-is with asyncpg.
 - Connection: use the **DIRECT (unpooled)** `DATABASE_URL_UNPOOLED`-style URL with `/cyberverse` path. The pooled `-pooler` URL works for runtime traffic; migrations should use the direct URL.
 
-### Git
-- Local repo initialized; branch **`repair/full-stack-production`** (3 commits on top of `origin/main`):
-  - `ce75de0` backend: security hardening, contact endpoint, regression tests
-  - `f12ac97` frontend: Nexus admin UI, SEO suite, UX hardening, perf
-  - `d9a01ec` repo: deployment groundwork, docs, git hygiene
-  - plus the config fix + deployment manifests commit.
-- **Push is blocked**: no GitHub credentials on this machine
-  (`fatal: could not read Username for 'https://github.com'`).
-  To publish: `gh auth login` or `git remote set-url origin https://<TOKEN>@github.com/ashrafhacker/CyberVerse.git`
-  (repo needs a token with `contents:write`), then
-  `git push -u origin repair/full-stack-production`.
+### Git — GitHub `ashrafhacker/CyberVerse`
+- Public repo on the personal account; `main` is the only deployed branch.
+- Push over HTTPS: `gh auth setup-git` wires the `gh` CLI keyring token as the
+  credential helper (token has `repo` scope; survives filesystem cleanups).
+- CI (`ci.yml`) runs on every push to `main`: backend lint+tests, frontend
+  lint+typecheck+tests, gitleaks+Trivy, Docker images to GHCR, then
+  **Deploy to Production** (Vercel). Deploy steps are guarded by
+  `if: env.<SECRET> != ''` so the pipeline stays green while credentials are
+  missing.
+- Required GitHub Actions secrets (repo `ashrafhacker/CyberVerse`):
+  | Secret | State |
+  | --- | --- |
+  | `VERCEL_TOKEN` | **set** (bosserrorneo-8234 CLI token) |
+  | `VERCEL_PROJECT_ID` | **set** (`prj_mkE4apirmrR3kE7mnY5DNThPG8m7`) |
+  | `VERCEL_ORG_ID` | **set** (`team_QuUUlV8KlBko8I8bFBz7V0wf`) |
+  | `CLERK_PUBLISHABLE_KEY` (Actions *variable*) | **set** — build-time pk source |
+  | `RENDER_API_KEY`, `RENDER_PROD_BACKEND_ID` | not set — Render billing pending |
 
 ---
 
@@ -77,11 +89,10 @@ free tiers are the intended substitutes.
 
 ## 3. Frontend on Vercel
 
-> **Status: BLOCKED on billing.** The authenticated Vercel account
-> (`bosserror1931-3672`, team `bosserror1931-gmailcoms-projects`) is suspended:
-> *"To reactivate your subscription, add a valid payment method."* Read-only CLI
-> calls work; project creation, `env add`, and deploys are rejected until the
-> subscription is reactivated in the Vercel dashboard → Billing.
+> **Status: LIVE in production.** Authenticated as `bosserrorneo-8234`, team
+> `neohacker-proejects` (hobby), project `cyververse` (`prj_mkE4apirmrR3kE7mnY5DNThPG8m7`).
+> Production alias: https://cyberverse-neohacker-proejects.vercel.app
+> (also aliased as https://cyberverse-beta.vercel.app).
 
 - Next.js app root: `frontend/` (project setting `rootDirectory: frontend`).
 - `/api/:path*` rewrites to `BACKEND_URL` (server-side env, default `http://127.0.0.1:8000`).
@@ -91,11 +102,15 @@ free tiers are the intended substitutes.
 
 ### Deploy
 ```bash
-cd frontend
-vercel link --yes --project cyberverse
-vercel env add BACKEND_URL production     # https://cyberverse-api.onrender.com
-vercel --prod                             # or: vercel deploy --prod
+# From the REPO ROOT — the Vercel project's Root Directory is "frontend",
+# so the upload must contain the frontend/ subdir (deploying from frontend/
+# fails with "Root Directory frontend does not exist").
+vercel link --yes --project cyberverse --scope neohacker-proejects
+vercel deploy --prod --yes
 ```
+Every push to `main` also deploys automatically via the CI `Deploy to Production`
+job (uses the `VERCEL_TOKEN` Actions secret).
+
 Then set the backend `CORS_ORIGINS` to the assigned `*.vercel.app` domain.
 
 Security headers (CSP, nosniff, Referrer-Policy, Permissions-Policy) ship from
@@ -108,15 +123,20 @@ views; before a real public launch with sensitive user data, re-add
 
 ## 4. CI/CD (GitHub Actions)
 
-`.github/workflows/ci.yml` already runs: backend lint+tests (with Postgres/Redis
+`.github/workflows/ci.yml` runs: backend lint+tests (with Postgres/Redis
 services), frontend lint/typecheck/tests/**production build**, Trivy fs scan,
 gitleaks secret scan, Docker image builds to GHCR, and staging/production deploy
-jobs. Repository secrets required for the deploy jobs:
+jobs. Every step is guarded by `if: env.<SECRET> != ''`, so the pipeline stays
+green until each credential exists.
 
-- `RENDER_API_KEY`, `RENDER_STAGING_BACKEND_ID` (+ production service ID per the workflow)
-- `VERCEL_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_ORG_ID`
-
-These cannot be created from this machine (no GitHub write access — see §1).
+- **Deploy to Production** (push to `main`): Vercel step is **active** (verified
+  2026-10-19, run `39230649046` → deployment `cyberverse-3is9omlg4`); Render
+  step stays skipped until `RENDER_API_KEY`/`RENDER_PROD_BACKEND_ID` are set.
+- **Deploy to Staging** (push to `develop`): both steps guarded the same way.
+- Repository secrets required for the deploy jobs (see §1 table for state):
+  `RENDER_API_KEY`, `RENDER_STAGING_BACKEND_ID`, `RENDER_PROD_BACKEND_ID`,
+  `VERCEL_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_ORG_ID`.
+  Set with: `gh secret set NAME --repo ashrafhacker/CyberVerse`.
 
 ---
 
@@ -138,9 +158,10 @@ These cannot be created from this machine (no GitHub write access — see §1).
 
 | Item | Status | Exact step to unblock |
 | ---- | ------ | --------------------- |
-| GitHub push | Blocked | Provide a PAT/`gh auth login`; push `repair/full-stack-production` |
-| Vercel deploy | Blocked (billing) | Reactivate the Vercel subscription (add valid payment method), then run the §3 commands |
-| Render account | Blocked | Create account → connect repo (blueprint auto-applies `render.yaml`) |
+| GitHub push | **Done** | `gh auth setup-git` (keyring token) + `git push origin main` to `ashrafhacker/CyberVerse` |
+| Vercel deploy | **Done** | Live in production; CI redeploys on every push to `main` |
+| Render backend | Blocked (billing) | `POST /v1/services` with the correct `servicePOST` payload returns **HTTP 402: "Payment information is required… https://dashboard.render.com/billing"**. Add a card, then run `python3 /tmp/opencode/render_create3.py` (or `render_create.py` — same payload) to create `cyberverse-api`; afterwards set GitHub secrets `RENDER_API_KEY` + `RENDER_PROD_BACKEND_ID` so CI can trigger deploys. If Render then asks for a connected Git account, connect GitHub once in the dashboard (New → Web Service → pick `ashrafhacker/CyberVerse`). |
+| GH Pages | Not applicable | The frontend is a dynamic Next.js app (server rewrites proxy `/api/*` to the backend); a static GH Pages copy would be a non-functional duplicate of the Vercel deployment. Use the Vercel URL. |
 | Upstash Redis | Not configured | Create free DB → put `rediss://...` into `REDIS_URL`/`CELERY_*` (Render Redis add-on is the simpler default) |
 | Cloudflare R2 | Blocked | Needs `R2_ACCOUNT_ID`/keys; `backend/.env.r2.example` documents the shape. Existing `cyberverse-assets` bucket must be reconciled by checksum before any upload — no bulk upload performed |
 | Sentry | Not configured | Replace placeholder DSN in backend env |
