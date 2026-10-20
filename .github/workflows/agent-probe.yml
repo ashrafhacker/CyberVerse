@@ -3,12 +3,9 @@
 name: Agent Probe
 
 on:
+  push:
+    branches: ["agent/**"]
   workflow_dispatch:
-    inputs:
-      mode:
-        description: "probe mode"
-        required: false
-        default: "projects"
 
 permissions:
   contents: read
@@ -23,7 +20,7 @@ jobs:
     steps:
       - name: Probe Vercel
         env:
-          MODE: ${{ inputs.mode }}
+          MODE: "push"
         run: |
           set -euo pipefail
           echo "== Vercel API reachable =="
