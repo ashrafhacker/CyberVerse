@@ -21,12 +21,13 @@ jobs:
       - name: Probe Vercel
         run: |
           set -uo pipefail
-          for u in "/v2/user" "/v2/teams?limit=20" "/v9/projects?limit=50&teamId=$VERCEL_ORG_ID" "/v9/projects/$VERCEL_PROJECT_ID/env?teamId=$VERCEL_ORG_ID"; do
-            code=$(curl -s -o /tmp/o.json -w "%{http_code}" "https://api.vercel.com$u" -H "Authorization: Bearer $VERCEL_TOKEN")
-            echo "--- $u -> $code"
-            head -c 600 /tmp/o.json; echo
-          done
-          echo "== vercel CLI whoami =="
-          npx --yes vercel@latest whoami --token "$VERCEL_TOKEN" 2>&1 | head -5 || true
-          echo "== vercel CLI project list =="
-          npx --yes vercel@latest project ls --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID" 2>&1 | head -20 || true
+          echo "== token fingerprint (non-secret) =="
+          python3 -c "import os;t=os.environ['VERCEL_TOKEN'];print('len=',len(t));print('prefix=',t[:4]);print('suffix=',t[-2:]);print('has_ws=',any(c.isspace() for c in t))"
+          echo "== /v2/user with UA =="
+          curl -s -w "\nHTTP=%{http_code}\n" "https://api.vercel.com/v2/user" -H "Authorization: Bearer $VERCEL_TOKEN" -H "User-Agent: cyberverse-ci-probe/1.0" | head -c 400
+          echo "== /v9/projects no team =="
+          curl -s -w "\nHTTP=%{http_code}\n" "https://api.vercel.com/v9/projects?limit=20" -H "Authorization: Bearer $VERCEL_TOKEN" -H "User-Agent: cyberverse-ci-probe/1.0" | head -c 400
+          echo "== vercel CLI whoami (no scope) =="
+          npx --yes vercel@latest whoami --token "$VERCEL_TOKEN" 2>&1 | grep -v "NOTE: The Vercel CLI now collects" | head -8
+          echo "== vercel CLI project ls (no scope) =="
+          npx --yes vercel@latest project ls --token "$VERCEL_TOKEN" 2>&1 | grep -v "NOTE: The Vercel CLI now collects" | head -20
