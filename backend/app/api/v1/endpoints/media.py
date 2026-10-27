@@ -24,7 +24,22 @@ from app.core.r2_storage import get_r2_bucket, get_r2_client, is_missing_object_
 from app.models.user import User
 
 router = APIRouter()
-_PROJECT_ROOT = Path(__file__).resolve().parents[6]
+# Find project root - works in both repo layout and container layout
+_path = Path(__file__).resolve()
+for _i in range(10):
+    _candidate = _path.parents[_i] if _i < len(_path.parents) else None
+    if _candidate and (_candidate / "assets" / "courses").exists():
+        _PROJECT_ROOT = _candidate
+        break
+else:
+    # Fallback: try parents[4] for container (/app) or parents[6] for repo
+    try:
+        _PROJECT_ROOT = _path.parents[4]  # container layout
+    except IndexError:
+        try:
+            _PROJECT_ROOT = _path.parents[6]  # repo layout
+        except IndexError:
+            _PROJECT_ROOT = _path.parents[-1]
 ASSETS_ROOT = _PROJECT_ROOT / "assets" / "courses"
 ALLOWED_EXTENSIONS = {".mp4", ".pdf"}
 _ASSET_COURSE_SLUGS = {
