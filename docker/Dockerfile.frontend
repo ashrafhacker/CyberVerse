@@ -11,7 +11,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY frontend/ ./
 ENV NEXT_TELEMETRY_DISABLED=1
 # ClerkProvider prerender needs the PUBLIC key at build time (public by design)
-ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_c3VpdGVkLXZlcnZldC0zNjYzLmNsZXJrLmFjY291bnRzLmRldiQ
 ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
 RUN npm run build
 
