@@ -306,7 +306,7 @@ class Settings(BaseSettings):
     OPENAI_TEMPERATURE: float = Field(default=0.7, ge=0.0, le=2.0)
     OPENAI_TIMEOUT_SECONDS: int = Field(default=30, ge=5, le=120)
     GEMINI_API_KEY: SecretStr | None = None
-    GEMINI_MODEL: str = Field(default="gemini-1.5-flash")
+    GEMINI_MODEL: str = Field(default="gemini-2.5-flash")
 
     OPENROUTER_API_KEY: SecretStr | None = None
     OPENROUTER_MODEL: str = Field(default="openrouter/auto")

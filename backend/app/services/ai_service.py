@@ -1,4 +1,5 @@
 import json
+import logging
 from uuid import UUID
 
 import httpx
@@ -9,6 +10,19 @@ from app.core.config import settings
 from app.core.redis import RedisClient
 from app.models.user import Profile
 from app.services.progress_service import LevelSystem, ProgressService
+
+logger = logging.getLogger(__name__)
+
+
+def _unwrap_secret(value: str | None) -> str | None:
+    """Return the raw string from a pydantic SecretStr (or the value itself).
+
+    str(SecretStr) renders as '**********', which would silently corrupt
+    Authorization headers and API-key query params.
+    """
+    if value is None:
+        return None
+    return value.get_secret_value() if hasattr(value, "get_secret_value") else value
 
 
 class AIService:
@@ -39,7 +53,8 @@ class AIService:
     )
 
     def __init__(self, api_key: str | None = None):
-        self.api_key = api_key or settings.OPENAI_API_KEY
+        self.api_key = _unwrap_secret(api_key) or _unwrap_secret(settings.OPENAI_API_KEY)
+        self.served_by = "fallback"
 
     @property
     def _headers(self) -> dict:
@@ -62,28 +77,39 @@ class AIService:
         A failing provider is skipped so the mentor stays available.
         """
         last_error: Exception | None = None
+        self.served_by = "fallback"
 
         if settings.OPENROUTER_API_KEY:
             try:
-                return await self._openrouter_chat(messages, temperature, max_tokens, model)
+                reply = await self._openrouter_chat(messages, temperature, max_tokens, model)
+                self.served_by = "openrouter"
+                return reply
             except Exception as e:  # noqa: BLE001
                 last_error = e
 
         if self.api_key or settings.OPENAI_API_KEY:
             try:
-                return await self._openai_chat(messages, temperature, max_tokens, model)
+                # Only forward the model name when it belongs to OpenAI — an
+                # OpenRouter model id ("openrouter/...") would 404 here.
+                openai_model = model if model and not model.startswith("openrouter/") else None
+                reply = await self._openai_chat(messages, temperature, max_tokens, openai_model)
+                self.served_by = "openai"
+                return reply
             except Exception as e:  # noqa: BLE001
                 last_error = e
 
         if getattr(settings, "GEMINI_API_KEY", None):
             try:
-                return await self._gemini_chat(messages, temperature, max_tokens, model)
+                reply = await self._gemini_chat(messages, temperature, max_tokens, None)
+                self.served_by = "gemini"
+                return reply
             except Exception as e:  # noqa: BLE001
                 last_error = e
 
-        import logging
         if last_error:
-            logging.getLogger(__name__).warning("All AI providers failed; using fallback", error=str(last_error))
+            # Log the provider failure without leaking secrets; keep serving the
+            # offline fallback so the mentor stays available.
+            logger.warning("All AI providers failed; using offline fallback: %s", last_error)
         return await self._fallback_response(messages)
 
     async def _gemini_chat(
@@ -93,10 +119,21 @@ class AIService:
         max_tokens: int,
         model: str | None = None,
     ) -> str:
-        api_key = getattr(settings, "GEMINI_API_KEY", None)
+        api_key = _unwrap_secret(getattr(settings, "GEMINI_API_KEY", None))
         if not api_key:
             raise ValueError("No Gemini API key configured (set GEMINI_API_KEY)")
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+        # Key travels in a header, not the query string, so it never appears in
+        # request URLs (httpx exceptions/log lines include the full URL).
+        gemini_model = (
+            model
+            if model and model.startswith("gemini-")
+            else settings.GEMINI_MODEL
+        )
+        url = (
+            "https://generativelanguage.googleapis.com/v1beta/"
+            f"models/{gemini_model}:generateContent"
+        )
+        gemini_headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
 
         gemini_messages = []
         system_instruction = None
@@ -120,7 +157,7 @@ class AIService:
             payload["systemInstruction"] = system_instruction
 
         async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(url, json=payload)
+            resp = await client.post(url, json=payload, headers=gemini_headers)
             resp.raise_for_status()
             data = resp.json()
             return data["candidates"][0]["content"]["parts"][0]["text"]
@@ -145,13 +182,23 @@ class AIService:
             )
             try:
                 resp.raise_for_status()
-                data = resp.json()
-                return data["choices"][0]["message"]["content"]
             except httpx.HTTPStatusError as e:
-                data = e.response.json()
-                if e.response.status_code == 429 and data.get("error", {}).get("type") == "insufficient_quota":
-                    return "SYSTEM ALERT: The provided OpenAI API key has run out of credits. Please add billing credits to your OpenAI account at platform.openai.com to resume AI Mentor functionality."
+                # Raise (including insufficient_quota) so the provider chain
+                # fails over to Gemini/fallback instead of surfacing billing
+                # details in a student-facing reply.
+                err_type = None
+                try:
+                    err_type = e.response.json().get("error", {}).get("type")
+                except Exception:  # noqa: BLE001
+                    pass
+                logger.warning(
+                    "OpenAI chat failed (status=%s type=%s)",
+                    e.response.status_code,
+                    err_type,
+                )
                 raise
+            data = resp.json()
+            return data["choices"][0]["message"]["content"]
 
     async def _openrouter_chat(
         self,
@@ -161,7 +208,7 @@ class AIService:
         model: str | None,
     ) -> str:
         headers = {
-            "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+            "Authorization": f"Bearer {_unwrap_secret(settings.OPENROUTER_API_KEY)}",
             "Content-Type": "application/json",
         }
         if settings.OPENROUTER_SITE_URL:
@@ -199,14 +246,31 @@ class AIService:
             system_content += f"\n\nREAL-TIME USER CONTEXT: {context}"
 
         messages = [{"role": "system", "content": system_content}] + history[-settings.AI_CHAT_HISTORY_LIMIT :]
-        model = settings.OPENROUTER_MODEL if settings.OPENROUTER_API_KEY else settings.OPENAI_MODEL
+        if settings.OPENROUTER_API_KEY:
+            temperature = settings.OPENROUTER_TEMPERATURE
+            max_tokens = settings.OPENROUTER_MAX_TOKENS
+            requested_model: str | None = settings.OPENROUTER_MODEL
+        else:
+            temperature = settings.OPENAI_TEMPERATURE
+            max_tokens = settings.OPENAI_MAX_TOKENS
+            requested_model = settings.OPENAI_MODEL
         reply = await self._chat(
             messages,
-            temperature=settings.OPENROUTER_TEMPERATURE if settings.OPENROUTER_API_KEY else settings.OPENAI_TEMPERATURE,
-            max_tokens=settings.OPENROUTER_MAX_TOKENS,
-            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            model=requested_model,
         )
-        return {"reply": reply, "model": model}
+        # Report the provider that actually served the reply (failover may
+        # differ from the requested one) — never a model name we didn't use.
+        if self.served_by == "gemini":
+            model_label = settings.GEMINI_MODEL
+        elif self.served_by == "openai":
+            model_label = requested_model or settings.OPENAI_MODEL
+        elif self.served_by == "openrouter":
+            model_label = requested_model or settings.OPENROUTER_MODEL
+        else:
+            model_label = "offline-fallback"
+        return {"reply": reply, "model": model_label}
 
     @staticmethod
     async def _fallback_response(messages: list[dict]) -> str:
@@ -234,10 +298,13 @@ class AIService:
                 )
             if "quiz" in prompt:
                 return "CyberVerse Mentor: Write 5 questions about the lesson topic with 4 answer choices each."
+            # Student-facing text must never mention internal API config;
+            # the technical reason is logged in _chat() instead.
             return (
                 "CyberVerse Mentor: Keep practicing! Review the lesson materials, "
                 "try the practice lab, and come back with specific questions. "
-                "Configure an OPENAI_API_KEY to unlock full AI guidance."
+                "I'm running in offline mode right now, so my answers are limited — "
+                "but I'll be fully back to normal shortly."
             )
 
     async def generate_quiz(self, topic: str, num_questions: int = 5, difficulty: str = "beginner") -> dict:
