@@ -50,8 +50,17 @@ export default function AIMentorWidget() {
       const reply = res.data?.reply || 'Keep pushing forward! Practice in the virtual sandbox to master this concept.';
       setMessages((prev) => [...prev, { id: String(Date.now() + 1), sender: 'ai', text: reply }]);
     } catch (err) {
-      const fallback = err instanceof Error ? err.message : 'The AI mentor is temporarily unavailable.';
-      setMessages((prev) => [...prev, { id: String(Date.now() + 1), sender: 'ai', text: fallback }]);
+      // Keep the technical cause in the console for debugging; show the
+      // student a mentor-toned line instead of raw HTTP jargon.
+      console.error('AI mentor request failed:', err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: String(Date.now() + 1),
+          sender: 'ai',
+          text: "My comms link to the knowledge core is jammed right now — I can't reach the training lab. Try pinging me again in a minute, Agent!",
+        },
+      ]);
     } finally {
       setLoading(false);
     }
