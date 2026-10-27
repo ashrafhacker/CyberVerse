@@ -131,20 +131,31 @@ export function addInterceptor(i: Interceptor): void { interceptors.push(i); }
 // Token Management (typed, defensive)
 // ---------------------------------------------------------------------------
 
+function _sanitizeToken(t: string | null): string | null {
+  if (!t) return null;
+  const s = t.trim();
+  if (s === '' || s === 'null' || s === 'undefined') return null;
+  return s;
+}
+
 export function getTokens(): { access: string | null; refresh: string | null } {
   if (typeof window === 'undefined') return { access: null, refresh: null };
   try {
     return {
-      access: localStorage.getItem(TOKEN_KEY),
-      refresh: localStorage.getItem(REFRESH_KEY),
+      access: _sanitizeToken(localStorage.getItem(TOKEN_KEY)),
+      refresh: _sanitizeToken(localStorage.getItem(REFRESH_KEY)),
     };
   } catch { return { access: null, refresh: null }; }
 }
 
 export function setTokens(access: string, refresh: string): void {
+  const a = _sanitizeToken(access);
+  const r = _sanitizeToken(refresh);
   try {
-    localStorage.setItem(TOKEN_KEY, access);
-    localStorage.setItem(REFRESH_KEY, refresh);
+    if (a) localStorage.setItem(TOKEN_KEY, a);
+    else localStorage.removeItem(TOKEN_KEY);
+    if (r) localStorage.setItem(REFRESH_KEY, r);
+    else localStorage.removeItem(REFRESH_KEY);
     // Notify other tabs via storage event (optional cross-tab sync)
     window.dispatchEvent(new CustomEvent('cyberverse:tokens-updated'));
   } catch {/* quota exceeded or private mode */}
@@ -358,12 +369,14 @@ export async function apiRequest<T = unknown>(rawPath: string, options: RequestO
         'X-Request-ID': (typeof crypto !== 'undefined' && 'randomUUID' in crypto) ? crypto.randomUUID() : Math.random().toString(36).slice(2),
         ...headers,
       };
-      if (auth && token) finalHeaders.Authorization = `Bearer ${token}`;
+      const tok = _sanitizeToken(token ?? null);
+      if (auth && tok) finalHeaders.Authorization = `Bearer ${tok}`;
       return fetchWithTimeout(`${API_URL}${path}`, {
         method,
         headers: finalHeaders,
         body: body !== undefined ? JSON.stringify(body) : undefined,
         signal,
+        credentials: 'include',
       }, timeoutMs);
     };
 

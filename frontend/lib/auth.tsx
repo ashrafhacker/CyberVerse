@@ -56,7 +56,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Seed the access token so the API client attaches it, then load our
       // backend user (this also provisions the local row via lazy sync).
       const token = await getToken();
-      if (token) setTokens(token, '');
+      if (token && typeof token === 'string' && token.trim() && token.trim() !== 'null' && token.trim() !== 'undefined') {
+        setTokens(token.trim(), '');
+      }
       const data = await api.get<{ data: User }>('/auth/me', { cache: 'no-store' });
       setUser(data.data);
     } catch {
