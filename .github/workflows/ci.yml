@@ -196,9 +196,12 @@ jobs:
     needs: [build-images, security-scan]
     if: github.ref == 'refs/heads/develop'
     environment: staging
+    # Frontend previews deploy through Vercel's GitHub integration (connected
+    # to this repo): every branch push creates a Preview deployment. CI does
+    # not also push to Vercel — that step used stale credentials
+    # ("scope-not-accessible") and double-built every commit.
     env:
       RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - name: Deploy backend to Render
@@ -210,15 +213,6 @@ jobs:
             -H "Authorization: Bearer $RENDER_API_KEY" \
             -H "Content-Type: application/json" \
             -d '{}'
-      - name: Deploy frontend to Vercel
-        if: env.VERCEL_TOKEN != ''
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-        # Deploy from repo root: the Vercel project's Root Directory setting
-        # is "frontend", so the upload must contain the frontend/ subdir.
-        run: npx vercel --prod --yes --token $VERCEL_TOKEN --scope $VERCEL_ORG_ID
 
   deploy-production:
     name: Deploy to Production
@@ -226,13 +220,18 @@ jobs:
     needs: [build-images, security-scan]
     if: github.ref == 'refs/heads/main'
     environment: production
-    # Secrets are not yet configured (Render billing + GitHub integration are
-    # pending user action). Job-level `if` cannot read the secrets context, so
-    # the guards live at step level via the env context: each deploy step is
+    # Render credentials are not yet configured (billing is pending user
+    # action). Job-level `if` cannot read the secrets context, so the guard
+    # lives at step level via the env context: the Render deploy step is
     # skipped until its credentials exist, keeping main green in the meantime.
+    #
+    # The frontend deploys through Vercel's GitHub integration (connected to
+    # this repo): every push to main creates a Production deployment. CI
+    # deliberately does NOT also push to Vercel — the old `vercel --prod`
+    # step failed with "scope-not-accessible" (stale token) and duplicated
+    # the integration's own build for the same commit.
     env:
       RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - name: Deploy backend to Render
@@ -244,12 +243,3 @@ jobs:
             -H "Authorization: Bearer $RENDER_API_KEY" \
             -H "Content-Type: application/json" \
             -d '{}'
-      - name: Deploy frontend to Vercel
-        if: env.VERCEL_TOKEN != ''
-        # Deploy from repo root: the Vercel project's Root Directory setting
-        # is "frontend", so the upload must contain the frontend/ subdir.
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-        run: npx vercel --prod --yes --token $VERCEL_TOKEN --scope $VERCEL_ORG_ID

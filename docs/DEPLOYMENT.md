@@ -1,17 +1,17 @@
 # CyberVerse — Deployment Runbook
 
-> **Status as of 2026-10-19** — the stack is live except the backend, which is
+> **Status as of 2026-10-27** — the stack is live except the backend, which is
 > blocked on Render billing (one dashboard action, see §6).
 
 Target architecture:
 
 | Layer      | Provider            | State                                                        |
 | ---------- | ------------------- | ------------------------------------------------------------ |
-| Frontend   | Vercel (team `neohacker-proejects`, project `cyberverse`) | **Live** — https://cyberverse-neohacker-proejects.vercel.app (also `cyberverse-beta.vercel.app`). CI deploys on every push to `main`. |
+| Frontend   | Vercel (team `neohacker-proejects`, project `cyberverse`) | **Live** — https://cyberverse-neohacker-proejects.vercel.app (also `cyberverse-beta.vercel.app`). The Vercel GitHub integration deploys every push to `main` (Production) and every branch push (Preview). |
 | Backend    | Render              | Service **not created** — API creation reaches HTTP 402 (payment info required). Script ready, see §6. |
 | Database   | Neon (us-east-1)    | **Live & verified** — project `crimson-firefly-97189410`, branch `cyberverse-production`, DB `cyberverse`, 75 tables, head=`0007_library_enum_names`. The unrelated `neondb` DB is untouched. |
 | Cache/jobs | Render Redis (default) or Upstash | Config via `REDIS_URL`/`CELERY_*` — created with the Render service; no Upstash creds present |
-| Git       | GitHub `ashrafhacker/CyberVerse` (public) | **Live** — `main` = `221665f`, pushed over HTTPS with the `gh` keyring token (`gh auth setup-git`) |
+| Git       | GitHub `ashrafhacker/CyberVerse` (public) | **Live** — `main` tracks the latest CI-green commit, pushed over HTTPS with the `gh` keyring token (`gh auth setup-git`) |
 | Assets     | Cloudflare R2       | **Blocked** — no R2 credentials on this machine              |
 | Auth       | Clerk (RS256 session tokens) | **Live** — instance `suited-vervet-3663` (`pk_test_…`); switch to `pk_live_`/`sk_live_` before real launch |
 | Email      | SendGrid (existing) | Key present in local `.env`; delivery **not verified**       |
@@ -37,15 +37,16 @@ Target architecture:
   credential helper (token has `repo` scope; survives filesystem cleanups).
 - CI (`ci.yml`) runs on every push to `main`: backend lint+tests, frontend
   lint+typecheck+tests, gitleaks+Trivy, Docker images to GHCR, then
-  **Deploy to Production** (Vercel). Deploy steps are guarded by
+  **Deploy to Production** (Render step only). Deploy steps are guarded by
   `if: env.<SECRET> != ''` so the pipeline stays green while credentials are
-  missing.
+  missing. The frontend is deployed by Vercel's **GitHub integration**, not CI
+  — the old CI `vercel --prod` step failed with "scope-not-accessible" (stale
+  token) and duplicated the integration's build for the same commit, so it was
+  removed 2026-10-27.
 - Required GitHub Actions secrets (repo `ashrafhacker/CyberVerse`):
   | Secret | State |
   | --- | --- |
-  | `VERCEL_TOKEN` | **set** (bosserrorneo-8234 CLI token) |
-  | `VERCEL_PROJECT_ID` | **set** (`prj_mkE4apirmrR3kE7mnY5DNThPG8m7`) |
-  | `VERCEL_ORG_ID` | **set** (`team_QuUUlV8KlBko8I8bFBz7V0wf`) |
+  | `VERCEL_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_ORG_ID` | set but **unused** — the token no longer passes Vercel auth (`scope-not-accessible`); frontend deploys go through the Vercel GitHub integration. Safe to delete, or replace with a fresh dashboard token if CI-owned deploys are ever wanted again |
   | `CLERK_PUBLISHABLE_KEY` (Actions *variable*) | **set** — build-time pk source |
   | `RENDER_API_KEY`, `RENDER_PROD_BACKEND_ID` | not set — Render billing pending |
 
@@ -90,7 +91,7 @@ free tiers are the intended substitutes.
 ## 3. Frontend on Vercel
 
 > **Status: LIVE in production.** Authenticated as `bosserrorneo-8234`, team
-> `neohacker-proejects` (hobby), project `cyververse` (`prj_mkE4apirmrR3kE7mnY5DNThPG8m7`).
+> `neohacker-proejects` (hobby), project `cyberverse` (`prj_mkE4apirmrR3kE7mnY5DNThPG8m7`).
 > Production alias: https://cyberverse-neohacker-proejects.vercel.app
 > (also aliased as https://cyberverse-beta.vercel.app).
 
@@ -108,8 +109,9 @@ free tiers are the intended substitutes.
 vercel link --yes --project cyberverse --scope neohacker-proejects
 vercel deploy --prod --yes
 ```
-Every push to `main` also deploys automatically via the CI `Deploy to Production`
-job (uses the `VERCEL_TOKEN` Actions secret).
+Every push to `main` deploys automatically through the **Vercel GitHub
+integration** (Production); branch pushes create Preview deployments. CI does
+not push to Vercel.
 
 Then set the backend `CORS_ORIGINS` to the assigned `*.vercel.app` domain.
 
@@ -129,13 +131,14 @@ gitleaks secret scan, Docker image builds to GHCR, and staging/production deploy
 jobs. Every step is guarded by `if: env.<SECRET> != ''`, so the pipeline stays
 green until each credential exists.
 
-- **Deploy to Production** (push to `main`): Vercel step is **active** (verified
-  2026-10-19, run `39230649046` → deployment `cyberverse-3is9omlg4`); Render
-  step stays skipped until `RENDER_API_KEY`/`RENDER_PROD_BACKEND_ID` are set.
-- **Deploy to Staging** (push to `develop`): both steps guarded the same way.
-- Repository secrets required for the deploy jobs (see §1 table for state):
-  `RENDER_API_KEY`, `RENDER_STAGING_BACKEND_ID`, `RENDER_PROD_BACKEND_ID`,
-  `VERCEL_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_ORG_ID`.
+- **Deploy to Production** (push to `main`): Render step stays skipped until
+  `RENDER_API_KEY`/`RENDER_PROD_BACKEND_ID` are set. The frontend deploys via
+  the Vercel GitHub integration (verified 2026-10-27: pushes `a1a3b17` and
+  `3904346` each produced a Production deployment with `source=github-push`).
+- **Deploy to Staging** (push to `develop`): Render step guarded the same way;
+  Vercel previews come from the GitHub integration.
+- Repository secrets required for the deploy jobs: `RENDER_API_KEY`,
+  `RENDER_STAGING_BACKEND_ID`, `RENDER_PROD_BACKEND_ID`.
   Set with: `gh secret set NAME --repo ashrafhacker/CyberVerse`.
 
 ---
@@ -159,7 +162,7 @@ green until each credential exists.
 | Item | Status | Exact step to unblock |
 | ---- | ------ | --------------------- |
 | GitHub push | **Done** | `gh auth setup-git` (keyring token) + `git push origin main` to `ashrafhacker/CyberVerse` |
-| Vercel deploy | **Done** | Live in production; CI redeploys on every push to `main` |
+| Vercel deploy | **Done** | Live in production; the Vercel GitHub integration redeploys every push to `main` (the duplicate CI `vercel --prod` step was removed 2026-10-27 — its token no longer authenticated) |
 | Render backend | Blocked (billing) | `POST /v1/services` with the correct `servicePOST` payload returns **HTTP 402: "Payment information is required… https://dashboard.render.com/billing"**. Add a card, then run `python3 /tmp/opencode/render_create3.py` (or `render_create.py` — same payload) to create `cyberverse-api`; afterwards set GitHub secrets `RENDER_API_KEY` + `RENDER_PROD_BACKEND_ID` so CI can trigger deploys. If Render then asks for a connected Git account, connect GitHub once in the dashboard (New → Web Service → pick `ashrafhacker/CyberVerse`). |
 | GH Pages | Not applicable | The frontend is a dynamic Next.js app (server rewrites proxy `/api/*` to the backend); a static GH Pages copy would be a non-functional duplicate of the Vercel deployment. Use the Vercel URL. |
 | Upstash Redis | Not configured | Create free DB → put `rediss://...` into `REDIS_URL`/`CELERY_*` (Render Redis add-on is the simpler default) |
