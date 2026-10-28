@@ -23,6 +23,7 @@ from app.api.v1.endpoints import (
     leaderboard,
     lessons,
     library,
+    mcp,
     media,
     missions,
     notifications,
@@ -68,4 +69,5 @@ api_router.include_router(soc.router, prefix="/soc", tags=["SOC"])
 api_router.include_router(support.router, prefix="/support", tags=["Support"])
 api_router.include_router(contact.router, prefix="/contact", tags=["Contact"])
 api_router.include_router(threat_intel.router, prefix="/threat-intel", tags=["Threat Intelligence"])
+api_router.include_router(mcp.router, tags=["MCP"])
 api_router.include_router(media.router, prefix="/media", tags=["Media"])

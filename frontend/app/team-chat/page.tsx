@@ -29,7 +29,7 @@ interface TeamData {
 
 export default function TeamChatPage() {
   const { user, loading } = useRequireAuth();
-  const { showToast } = useToast();
+  const toast = useToast();
   const [teamData, setTeamData] = useState<TeamData | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -49,14 +49,14 @@ export default function TeamChatPage() {
           api.get<{ data: TeamData }>('/teams/current'),
           api.get<{ data: ChatMessage[] }>('/teams/messages'),
         ]);
-        setTeamData(tRes.data.data);
-        setMessages(mRes.data.data);
+        setTeamData(tRes.data || null);
+        setMessages(mRes.data || []);
       } catch (e: any) {
-        showToast('Failed to load team data: ' + (e?.message || 'Unknown error'), 'error');
+        toast.error('Failed to load team data: ' + (e?.message || 'Unknown error'));
       }
     };
     load();
-  }, [user, showToast]);
+  }, [user, toast]);
 
   const handleSend = useCallback(async () => {
     if (!input.trim() || !teamData) return;
@@ -67,14 +67,14 @@ export default function TeamChatPage() {
         message: input.trim(),
         type: 'text',
       });
-      setMessages(prev => [...prev, res.data.data]);
+      setMessages(prev => [...prev, res || { sender: user?.email || 'me', message: input.trim(), type: 'text', timestamp: Date.now() }]);
       setInput('');
     } catch (err: any) {
-      showToast('Failed to send message', 'error');
+      toast.error('Failed to send message');
     } finally {
       setIsSending(false);
     }
-  }, [input, teamData, showToast]);
+  }, [input, teamData, toast]);
 
   if (loading || !user) return <div className="p-8 text-center">Loading chat...</div>;
 

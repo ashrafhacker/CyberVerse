@@ -25,7 +25,7 @@ export default function DocumentsPage() {
 
   useEffect(() => {
     if (!user) return;
-    api.get<{ data: Doc[] }>('/docs/team').then(r => setDocs(r.data.data || [])).catch(() => setDocs([]));
+    api.get<{ data: Doc[] }>('/docs/team').then(r => setDocs(r.data || [])).catch(() => setDocs([]));
   }, [user]);
 
   const types = filter === 'all' ? docs : docs.filter(d => d.type === filter);

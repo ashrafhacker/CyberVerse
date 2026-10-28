@@ -23,7 +23,7 @@ export default function NotificationsPage() {
   useEffect(() => {
     if (!user) return;
     api.get<{ data: NotificationItem[] }>('/notifications').then(r => {
-      const data = r.data.data || [];
+      const data = r.data || [];
       setItems(data);
       setUnreadCount(data.filter(i => !i.read).length);
     }).catch(() => setItems([]));
