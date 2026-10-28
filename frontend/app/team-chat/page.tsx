@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Send, Users, Shield, Clock, Bell, FileText, MessageSquare, CheckCircle2 } from 'lucide-react';
 import { useRequireAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/lib/toast';
 
 interface ChatMessage {
   id: string;
