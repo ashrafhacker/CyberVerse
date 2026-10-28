@@ -64,17 +64,25 @@ const nextConfig = {
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production',
   },
+  swcMinify: true,
+  productionBrowserSourceMaps: false,
   // NOTE: cesium is intentionally NOT in transpilePackages. cesium@1.145 ships
   // native ESM ("type":"module", exports["."].import -> ./Source/Cesium.js)
   // plus a CJS entry, so Next/Turbopack consume it directly. Transpiling the
   // 79 MB package on every compile was a major dev-time cost with no benefit.
   experimental: {
-    optimizePackageImports: ['lucide-react', 'framer-motion', 'motion', '@radix-ui/react-icons'],
+    optimizePackageImports: ['lucide-react', 'framer-motion', 'motion', '@radix-ui/react-icons', 'swr'],
+    optimizeCss: true,
     // Dev proxy hard-kills streams after 30s of socket inactivity (http-proxy
     // proxyTimeout), which broke video playback whenever the player paused
     // reading while its buffer was full (500 "Internal Server Error" mid-stream).
     // A large value effectively disables it; schema requires a number >= 0.
     proxyTimeout: 3600000,
+  },
+  modularizeImports: {
+    'lucide-react': {
+      transform: 'lucide-react/dist/esm/icons/{{kebabCase member}}',
+    },
   },
   // The old `turbopack.rules` block mapped *.svg through @svgr/webpack. That
   // package isn't installed and no module imports an .svg, so the rule was dead
