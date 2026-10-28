@@ -1,14 +1,15 @@
 # CyberVerse — Deployment Runbook
 
-> **Status as of 2026-10-27** — the stack is live except the backend, which is
-> blocked on Render billing (one dashboard action, see §6).
+> **Status as of 2026-10-28** — the full stack is live: frontend on Vercel,
+> backend on **blitz** (Render was abandoned — its API returns HTTP 402, see §6).
+> Verified end-to-end 2026-10-28; see §7 for the blitz runbook.
 
 Target architecture:
 
 | Layer      | Provider            | State                                                        |
 | ---------- | ------------------- | ------------------------------------------------------------ |
 | Frontend   | Vercel (team `neohacker-proejects`, project `cyberverse`) | **Live** — https://cyberverse-neohacker-proejects.vercel.app (also `cyberverse-beta.vercel.app`). The Vercel GitHub integration deploys every push to `main` (Production) and every branch push (Preview). |
-| Backend    | Render              | Service **not created** — API creation reaches HTTP 402 (payment info required). Script ready, see §6. |
+| Backend    | blitz (app `cyberverse-api`, project `CyberVerse`) | **Live** — https://cyberverse-api.cyberverse.blitz.cloud — Free plan, GitHub auto-build on push to `main`, latest deployed build `a37e675`. See §7. |
 | Database   | Neon (us-east-1)    | **Live & verified** — project `crimson-firefly-97189410`, branch `cyberverse-production`, DB `cyberverse`, 75 tables, head=`0007_library_enum_names`. The unrelated `neondb` DB is untouched. |
 | Cache/jobs | Render Redis (default) or Upstash | Config via `REDIS_URL`/`CELERY_*` — created with the Render service; no Upstash creds present |
 | Git       | GitHub `ashrafhacker/CyberVerse` (public) | **Live** — `main` tracks the latest CI-green commit, pushed over HTTPS with the `gh` keyring token (`gh auth setup-git`) |
@@ -163,11 +164,82 @@ green until each credential exists.
 | ---- | ------ | --------------------- |
 | GitHub push | **Done** | `gh auth setup-git` (keyring token) + `git push origin main` to `ashrafhacker/CyberVerse` |
 | Vercel deploy | **Done** | Live in production; the Vercel GitHub integration redeploys every push to `main` (the duplicate CI `vercel --prod` step was removed 2026-10-27 — its token no longer authenticated) |
-| Render backend | Blocked (billing) | `POST /v1/services` with the correct `servicePOST` payload returns **HTTP 402: "Payment information is required… https://dashboard.render.com/billing"**. Add a card, then run `python3 /tmp/opencode/render_create3.py` (or `render_create.py` — same payload) to create `cyberverse-api`; afterwards set GitHub secrets `RENDER_API_KEY` + `RENDER_PROD_BACKEND_ID` so CI can trigger deploys. If Render then asks for a connected Git account, connect GitHub once in the dashboard (New → Web Service → pick `ashrafhacker/CyberVerse`). |
+| Render backend | **Superseded by blitz (§7)** — Render stays blocked (billing) | `POST /v1/services` returns **HTTP 402: "Payment information is required…"**. Only revisit Render if leaving blitz; the production backend is `cyberverse-api` on blitz (§7). CI still carries the Render deploy steps as no-ops (`if: env.RENDER_API_KEY != ''`). |
 | GH Pages | Not applicable | The frontend is a dynamic Next.js app (server rewrites proxy `/api/*` to the backend); a static GH Pages copy would be a non-functional duplicate of the Vercel deployment. Use the Vercel URL. |
 | Upstash Redis | Not configured | Create free DB → put `rediss://...` into `REDIS_URL`/`CELERY_*` (Render Redis add-on is the simpler default) |
 | Cloudflare R2 | Blocked | Needs `R2_ACCOUNT_ID`/keys; `backend/.env.r2.example` documents the shape. Existing `cyberverse-assets` bucket must be reconciled by checksum before any upload — no bulk upload performed |
 | Sentry | Not configured | Replace placeholder DSN in backend env |
-| SendGrid delivery | Configured, not verified | Send one test message to an authorized recipient after setting the key in Render |
+| SendGrid delivery | Configured, not verified | Send one test message to an authorized recipient after setting the key in the hosting env (blitz, §7) |
 | Clerk | Configured, dashboard step pending | Backend verifies RS256 session tokens (JWKS), syncs users via `/auth/me` lazy provision + `POST /api/v1/auth/clerk/webhook`. Set `CLERK_PUBLISHABLE_KEY`/`CLERK_SECRET_KEY` in Render, then in **Clerk Dashboard → Webhooks** add endpoint `https://cyberverse-api.onrender.com/api/v1/auth/clerk/webhook` with the `whsec_…` secret placed in `CLERK_WEBHOOK_SECRET`. Events: `user.created`, `user.updated`, `user.deleted`. Switch the instance to **production keys** (`pk_live_`/`sk_live_`) before launch |
 | Resend | Not applicable | SendGrid is the configured provider |
+
+---
+
+## 7. blitz backend runbook (live since 2026-10-28)
+
+**Identity**
+
+| Item | Value |
+| ---- | ----- |
+| Platform | blitz — **Free plan** (`€0`; do not upgrade: limits below) |
+| App | `cyberverse-api`, id `6985e3bc-0cbd-4ab2-8bcf-36d38c3ee24b`, project `CyberVerse` |
+| Public URL | https://cyberverse-api.cyberverse.blitz.cloud |
+| Build source | GitHub `ashrafhacker/CyberVerse` `main` — push triggers an automatic build+deploy (verified: pushes `8341af6` and `a37e675` each produced a blitz build without any manual step) |
+| Latest deployed build | `a37e675` "fix: merge frontend url into cors" (build `e6144d00`, finished 2026-10-28T05:26:11Z) |
+| Redis | blitz Redis, id `9559e0e6-cd4b-4193-91d6-68fa80ea7a36`, wired via `REDIS_URL` |
+| Uptime Kuma | separate blitz app `fb85a590-ce26-4558-a552-28d4809cec21` |
+
+**Free-plan limits (verify in the blitz dashboard before scaling)**
+
+| Limit | Value | Last checked |
+| ----- | ----- | ------------ |
+| Apps | 2 / 5 used | 2026-10-27 |
+| DB slots | 1 / 1 used (Neon is external — the slot is the blitz-managed Redis) | 2026-10-27 |
+| RAM per app | 512 MB | 2026-10-27 |
+| Build minutes | 6 / 300 this period (reset 2026-11-01) | 2026-10-27 |
+
+**Wake behavior:** free apps sleep on idle. A request after idle wakes the app —
+expect cold-start latency (DB check ~2 s on the first call) and re-test after
+~60 s. `blitz env set` does **not** restart the app; `blitz restart --yes` does,
+and requests immediately after a restart can still hit the old process for up to
+~1 min. One-line remote command form:
+`blitz run cyberverse-api --yes -- sh -c '<cmd>'`.
+
+**Env vars (names only — values live in the blitz dashboard, never in git/chat):**
+
+`DATABASE_URL`, `REDIS_URL`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`,
+`CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SECRET` (**missing** —
+see §6), `CORS_ORIGINS`, `FRONTEND_URL`, `SENTRY_DSN`, `ENVIRONMENT`, plus the
+app/feature settings. Inventory taken 2026-10-28: 25 names total. No
+SendGrid/SMTP key and no AI provider key are set (see §6).
+
+**CORS (verified 2026-10-28, both curl preflight and a real browser fetch):**
+
+`CORS_ORIGINS` is a JSON list of exactly these five origins:
+
+1. `https://cyberverse-neohacker-proejects.vercel.app` (production frontend)
+2. `https://cyberverse-beta.vercel.app`
+3. `https://cyberverse.vercel.app`
+4. `http://localhost:3000`
+5. `http://localhost:3001`
+
+`FRONTEND_URL` is merged into the allow-list at startup by the
+`_merge_frontend_cors` validator in `backend/app/core/config.py` (`a37e675`), so
+changing `FRONTEND_URL` can never lock the frontend out again. CORS behavior:
+`OPTIONS` preflight from an allowed origin → 200 with `access-control-allow-origin`
+echoing that origin; credentialed `GET` from an allowed origin → 401 (signed out)
+with ACAO + `access-control-allow-credentials: true` + `access-control-expose-headers`.
+Disallowed origins get no ACAO header. Adding an origin = `blitz env set
+CORS_ORIGINS '<json list>'` + `blitz restart --yes` + re-test after ~60 s.
+
+**Celery — documented, no worker (intentional):** broker
+(`celery_broker: ok` in `/health/detailed`, producer connects) is VERIFIED;
+there is **no worker process** on the free app, so queued tasks are never
+consumed. Nothing currently enqueues work in the request path. Before enabling
+any feature that relies on background tasks, either run a worker (separate
+command/process in the app) or revisit the plan.
+
+**Endpoints verified against the deployed build (2026-10-28):**
+`GET /health`, `GET /health/detailed` (db/redis/celery_broker all `ok`),
+`GET /api/v1/...` routing, Clerk JWKS, `POST /api/v1/ai/chat` (offline fallback
+truthful reply; schema-invalid body → 422; auth-gated AI routes → 401).

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Shield, LayoutDashboard, BookOpen, Swords, Trophy, User, LogOut, Settings, FlaskConical, Wrench, Award, Globe, Gamepad2, Flag } from 'lucide-react';
+import { Shield, LayoutDashboard, BookOpen, Swords, Trophy, User, LogOut, Settings, FlaskConical, Wrench, Award, Globe, Gamepad2, Flag, Terminal, Users } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import type { UserRole } from '@/lib/types';
@@ -62,6 +62,8 @@ export default function Navbar() {
     { href: '/tools', label: 'Tools', icon: Wrench },
     { href: '/leaderboard', label: 'Leaderboard', icon: Trophy },
     { href: '/certificates', label: 'Certificates', icon: Award },
+    { href: '/simulation', label: 'Simulation', icon: Terminal },
+    { href: '/team-chat', label: 'Team Chat', icon: Users },
     { href: '/profile', label: 'Profile', icon: User },
     ...(user.role && INSTRUCTOR_ROLES.includes(user.role)
       ? [{ href: '/instructor', label: 'Instructor', icon: Settings }]
