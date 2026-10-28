@@ -29,9 +29,12 @@ from app.core.config import settings
 from app.models.user import AuthProvider, Profile, User, UserRole, UserStatus
 from app.services.clerk_sync import sync_clerk_user
 
-# Test publishable key: pk_test_ + base64("example.clerk.accounts.dev")
+# Test publishable key: pk_test_ + base64("example.clerk.accounts.dev$").
+# Real Clerk keys terminate the decoded payload with '$' (Clerk's own
+# buildPublishableKey encodes `${frontendApi}$`); the fixture must match that
+# format or the decode path silently diverges from production keys.
 _DOMAIN = "example.clerk.accounts.dev"
-_PK = "pk_test_" + base64.urlsafe_b64encode(_DOMAIN.encode()).decode().rstrip("=")
+_PK = "pk_test_" + base64.urlsafe_b64encode((_DOMAIN + "$").encode()).decode().rstrip("=")
 _FRONTEND_API = f"https://{_DOMAIN}"
 
 

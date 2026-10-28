@@ -45,9 +45,14 @@ class ClerkError(Exception):
 def clerk_frontend_api() -> str:
     """Derive the instance frontend-API origin from the publishable key.
 
-    The publishable key is ``pk_test_<base64(domain)>`` or ``pk_live_<base64>``.
-    Decoding the payload yields the instance domain (e.g.
-    ``suited-vervet-3663.clerk.accounts.dev``).
+    The publishable key is ``pk_test_<base64(domain + "$")>`` or
+    ``pk_live_<base64(domain + "$")>``: Clerk encodes the instance domain
+    followed by a trailing ``$`` terminator (see Clerk's own
+    ``buildPublishableKey``/``parsePublishableKey`` in @clerk/shared, which
+    strips it with ``decoded.slice(0, -1)``). Decoding the payload therefore
+    yields e.g. ``suited-vervet-3663.clerk.accounts.dev$`` and the ``$`` must
+    be removed before building the URL — otherwise the hostname is invalid
+    (DNS resolution fails and every JWKS fetch 401s).
     """
     pk = settings.CLERK_PUBLISHABLE_KEY
     if not pk:
@@ -61,6 +66,9 @@ def clerk_frontend_api() -> str:
         domain = base64.b64decode(payload).decode("utf-8")
     except Exception as exc:  # noqa: BLE001 — malformed key
         raise ClerkError("CLERK_PUBLISHABLE_KEY payload is not valid base64") from exc
+    # Clerk keys terminate the decoded payload with '$'; strip it (defensive:
+    # also tolerate legacy keys that were saved without it).
+    domain = domain.rstrip("$")
     if not domain:
         raise ClerkError("CLERK_PUBLISHABLE_KEY decoded to an empty domain")
     return f"https://{domain}"
