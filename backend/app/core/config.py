@@ -451,6 +451,15 @@ class Settings(BaseSettings):
                 raise ValueError("Wildcard CORS origin not allowed — specify explicit origins")
         return v
 
+    @model_validator(mode="after")
+    def _merge_frontend_cors(self) -> "Settings":
+        try:
+            if self.FRONTEND_URL and self.FRONTEND_URL not in self.CORS_ORIGINS:
+                self.CORS_ORIGINS = list(self.CORS_ORIGINS) + [self.FRONTEND_URL]
+        except Exception:
+            pass
+        return self
+
     @field_validator("DATABASE_POOL_SIZE")
     @classmethod
     def _validate_pool(cls, v: int) -> int:
