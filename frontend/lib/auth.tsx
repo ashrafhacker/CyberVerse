@@ -118,9 +118,6 @@ export function useRequireAuth() {
   const { user, loading, isSignedIn, refreshUser } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  // Guard against redirect storms: only issue the redirect once per mount even
-  // if `user` stays null (e.g. backend /auth/me failing), which previously
-  // caused the tab to blink between /login and the protected page.
   const redirectedRef = useRef(false);
   const attemptsRef = useRef(0);
 
@@ -131,17 +128,24 @@ export function useRequireAuth() {
       attemptsRef.current = 0;
       return;
     }
-    // If Clerk says signed in but we don't have backend user yet,
-    // give it a few attempts/delays for backend sync (lazy provisioning) before redirecting
-    if (isSignedIn && attemptsRef.current < 6) {
-      attemptsRef.current += 1;
-      const delay = 250 * attemptsRef.current;
+    // If Clerk says signed in, keep trying to sync with backend; never redirect to login
+    if (isSignedIn) {
+      if (attemptsRef.current < 12) {
+        attemptsRef.current += 1;
+        const delay = 200 * attemptsRef.current;
+        const t = setTimeout(() => {
+          refreshUser().catch(() => {});
+        }, delay);
+        return () => clearTimeout(t);
+      }
+      // After many attempts, still no backend user - don't redirect, just keep trying slowly
       const t = setTimeout(() => {
         refreshUser().catch(() => {});
-      }, delay);
+      }, 2000);
       return () => clearTimeout(t);
     }
-    if (!user && !redirectedRef.current) {
+    // Only redirect if definitely signed out
+    if (isSignedIn === false && !user && !redirectedRef.current) {
       redirectedRef.current = true;
       const search = typeof window !== 'undefined' ? window.location.search : '';
       const target = `${pathname}${search}`;
