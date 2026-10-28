@@ -29,6 +29,7 @@ import type { User } from './types';
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
+  isSignedIn: boolean | undefined;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -91,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [signOut, router]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, isSignedIn, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
@@ -114,16 +115,32 @@ export function useAuth(): AuthContextValue {
  *   them here.
  */
 export function useRequireAuth() {
-  const { user, loading } = useAuth();
+  const { user, loading, isSignedIn, refreshUser } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   // Guard against redirect storms: only issue the redirect once per mount even
   // if `user` stays null (e.g. backend /auth/me failing), which previously
   // caused the tab to blink between /login and the protected page.
   const redirectedRef = useRef(false);
+  const attemptsRef = useRef(0);
 
   useEffect(() => {
     if (loading) return;
+    if (user) {
+      redirectedRef.current = false;
+      attemptsRef.current = 0;
+      return;
+    }
+    // If Clerk says signed in but we don't have backend user yet,
+    // give it a few attempts/delays for backend sync (lazy provisioning) before redirecting
+    if (isSignedIn && attemptsRef.current < 6) {
+      attemptsRef.current += 1;
+      const delay = 250 * attemptsRef.current;
+      const t = setTimeout(() => {
+        refreshUser().catch(() => {});
+      }, delay);
+      return () => clearTimeout(t);
+    }
     if (!user && !redirectedRef.current) {
       redirectedRef.current = true;
       const search = typeof window !== 'undefined' ? window.location.search : '';
@@ -131,7 +148,7 @@ export function useRequireAuth() {
       saveRedirectTarget(target);
       router.replace(`/login?redirect=${encodeURIComponent(target)}`);
     }
-  }, [loading, user, pathname, router]);
+  }, [loading, user, isSignedIn, pathname, router, refreshUser]);
 
   return { user, loading };
 }
