@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Shield, Users, Lock, UserPlus, KeyRound, AlertTriangle } from 'lucide-react';
 import { useRequireAuth } from '@/lib/auth';
 
@@ -19,8 +20,8 @@ export default function RBACPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 text-slate-100">
       <nav className="border-b border-slate-800/60 px-6 py-4 flex items-center justify-between backdrop-blur-sm bg-slate-900/40 sticky top-0 z-50">
-        <a href="/" className="font-mono text-lg font-bold text-cyan-400">CyberVerse</a>
-        <a href="/simulation" className="text-sm text-cyan-300 hover:text-cyan-200">Simulation</a>
+        <Link href="/" className="font-mono text-lg font-bold text-cyan-400">CyberVerse</Link>
+        <Link href="/simulation" className="text-sm text-cyan-300 hover:text-cyan-200">Simulation</Link>
       </nav>
 
       <main className="max-w-5xl mx-auto px-6 py-10">

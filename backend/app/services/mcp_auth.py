@@ -9,7 +9,15 @@ from app.core.clerk import ClerkError, clerk_frontend_api, _fetch_jwks
 from app.core.config import settings
 
 _RESOURCE_AUDIENCE = "https://opencode"
-_CLERK_ISSUER = clerk_frontend_api()
+
+
+def _clerk_issuer() -> str:
+    """Resolve the Clerk instance issuer at call time.
+
+    Resolving at import time made ``app.main`` unimportable (and the whole
+    test suite unrunnable) whenever ``CLERK_PUBLISHABLE_KEY`` was unset.
+    """
+    return clerk_frontend_api()
 
 
 class MCPAuthError(Exception):
@@ -67,7 +75,7 @@ async def verify_oauth_token(token: str) -> dict:
             jwk,
             algorithms=[_CLERK_ALGORITHM],
             audience=_RESOURCE_AUDIENCE,
-            issuer=_CLERK_ISSUER,
+            issuer=_clerk_issuer(),
             options={"verify_exp": True},
         )
     except JWTError as exc:

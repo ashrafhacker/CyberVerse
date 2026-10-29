@@ -12,6 +12,18 @@ os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-0123456789abcdef0123456
 os.environ.setdefault("ENVIRONMENT", "testing")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/15")
 
+# A well-formed dummy Clerk publishable key: the MCP endpoints derive the
+# instance issuer from it at request time, so a fresh clone without real
+# Clerk credentials must still be able to import app.main and run the suite.
+# (Format is pk_test_ + base64("<frontend-api domain>$"), matching
+# app.core.clerk.clerk_frontend_api.)
+import base64 as _base64  # noqa: E402
+
+os.environ.setdefault(
+    "CLERK_PUBLISHABLE_KEY",
+    "pk_test_" + _base64.b64encode(b"example.clerk.accounts.dev$").decode("ascii"),
+)
+
 # Clear settings cache to pick up test env vars
 from app.core.config import get_settings
 get_settings.cache_clear()

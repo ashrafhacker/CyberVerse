@@ -18,7 +18,12 @@ router = APIRouter(prefix="/mcp", tags=["mcp"])
 # NOTE: JWT `iss` verification in mcp_auth uses the real instance domain
 # (provider keyed by CLERK_PUBLISHABLE_KEY). The URL below is advertised for
 # OAuth protected-resource metadata discovery per user spec.
-_CLERK_ISSUER = clerk_frontend_api()
+def _clerk_issuer() -> str:
+    """Clerk instance origin, resolved at request time (not import time) so
+    the app can boot/import without CLERK_PUBLISHABLE_KEY configured."""
+    return clerk_frontend_api()
+
+
 _AUTH_SERVER_URL = "https://clerk.cyberverse.com"
 _RESOURCE_URI = "https://cyberverse-api.cyberverse.blitz.cloud/mcp"
 _RESOURCE_AUDIENCE = "https://opencode"
@@ -38,7 +43,7 @@ async def _auth_challenge(request: Request) -> Response:
         content=json.dumps({
             "error": "invalid_token",
             "message": "Clerk OAuth access token required (typ=at+JWT, aud=https://opencode)",
-            "authorization_server": _CLERK_ISSUER,
+            "authorization_server": _clerk_issuer(),
             "resource_uri": _RESOURCE_URI,
         }),
         media_type="application/json",
@@ -92,8 +97,8 @@ async def resource_metadata() -> dict:
 async def auth_server_metadata() -> dict:
     return {
         "issuer": _AUTH_SERVER_URL,
-        "authorization_endpoint": f"{_CLERK_ISSUER}/oauth/authorize",
-        "token_endpoint": f"{_CLERK_ISSUER}/oauth/token",
-        "jwks_uri": f"{_CLERK_ISSUER}/.well-known/jwks.json",
+        "authorization_endpoint": f"{_clerk_issuer()}/oauth/authorize",
+        "token_endpoint": f"{_clerk_issuer()}/oauth/token",
+        "jwks_uri": f"{_clerk_issuer()}/.well-known/jwks.json",
         "scopes_supported": ["openid", "profile", "offline_access"],
     }
