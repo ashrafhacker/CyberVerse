@@ -7,13 +7,26 @@ const navMock = vi.hoisted(() => {
   return { replace, router: { replace }, pathname: '/courses/course-1' };
 });
 
-const apiMock = vi.hoisted(() => ({
-  api: { get: vi.fn(), post: vi.fn() },
-  clearTokens: vi.fn(),
-  getTokens: vi.fn(),
-  setTokens: vi.fn(),
-  setTokenRefresher: vi.fn(),
-}));
+const apiMock = vi.hoisted(() => {
+  class ApiError extends Error {
+    status: number;
+    code?: string;
+    constructor(status: number, message: string, _details = {}, code?: string) {
+      super(message);
+      this.name = 'ApiError';
+      this.status = status;
+      this.code = code;
+    }
+  }
+  return {
+    api: { get: vi.fn(), post: vi.fn() },
+    ApiError,
+    clearTokens: vi.fn(),
+    getTokens: vi.fn(),
+    setTokens: vi.fn(),
+    setTokenRefresher: vi.fn(),
+  };
+});
 
 const clerkMock = vi.hoisted(() => ({
   useAuth: vi.fn(),
@@ -98,6 +111,25 @@ describe('useRequireAuth', () => {
 
     const { result } = renderHook(() => useRequireAuth(), { wrapper });
     await waitFor(() => expect(result.current.user).toEqual(TEST_USER));
+    expect(navMock.replace).not.toHaveBeenCalled();
+  });
+
+  it('does NOT redirect when signed in but the backend is unavailable', async () => {
+    // Regression guard: a backend/network failure must surface as a distinct
+    // status with retry — never a login redirect (the old infinite loop).
+    clerkSession({
+      isLoaded: true,
+      isSignedIn: true,
+      getToken: vi.fn().mockResolvedValue('clerk-session-jwt'),
+    });
+    apiMock.api.get.mockRejectedValue(new apiMock.ApiError(0, 'Network unavailable'));
+
+    const { result } = renderHook(() => useRequireAuth(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.user).toBeNull();
+    expect(result.current.status).toBe('backend-unavailable');
+    expect(result.current.error).toBeTruthy();
+    expect(typeof result.current.retry).toBe('function');
     expect(navMock.replace).not.toHaveBeenCalled();
   });
 });

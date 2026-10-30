@@ -2,16 +2,31 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 
-const apiMock = vi.hoisted(() => ({
-  api: {
-    get: vi.fn(),
-    post: vi.fn(),
-  },
-  clearTokens: vi.fn(),
-  getTokens: vi.fn(),
-  setTokens: vi.fn(),
-  setTokenRefresher: vi.fn(),
-}));
+const apiMock = vi.hoisted(() => {
+  // Minimal ApiError mirror so auth.tsx error classification works under the
+  // mocked api module (instanceof must resolve to the same class).
+  class ApiError extends Error {
+    status: number;
+    code?: string;
+    constructor(status: number, message: string, _details = {}, code?: string) {
+      super(message);
+      this.name = 'ApiError';
+      this.status = status;
+      this.code = code;
+    }
+  }
+  return {
+    api: {
+      get: vi.fn(),
+      post: vi.fn(),
+    },
+    ApiError,
+    clearTokens: vi.fn(),
+    getTokens: vi.fn(),
+    setTokens: vi.fn(),
+    setTokenRefresher: vi.fn(),
+  };
+});
 
 const clerkMock = vi.hoisted(() => ({
   useAuth: vi.fn(),
@@ -154,5 +169,102 @@ describe('useAuth', () => {
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.user).toBeNull();
+  });
+});
+
+describe('distinct auth states (bounded retry, no infinite loop)', () => {
+  it('reports backend-unavailable on network failure and stops retrying', async () => {
+    vi.useFakeTimers();
+    try {
+      clerkSignedIn();
+      apiMock.api.get.mockRejectedValue(new apiMock.ApiError(0, 'Network unavailable'));
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(result.current.status).toBe('backend-unavailable');
+      expect(result.current.loading).toBe(false);
+      expect(result.current.user).toBeNull();
+      expect(result.current.error).toBeTruthy();
+      // The error message must never contain the session token.
+      expect(result.current.error).not.toContain('clerk-session-jwt');
+
+      // Drain every backoff window: the retry budget must run out (bounded).
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
+      });
+      const settled = apiMock.api.get.mock.calls.length;
+      expect(settled).toBeGreaterThanOrEqual(2); // it did auto-retry
+      expect(settled).toBeLessThanOrEqual(6); // initial attempts + MAX_AUTO_RETRIES
+
+      // And it must stay settled — no zombie timers keep firing.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
+      });
+      expect(apiMock.api.get.mock.calls.length).toBe(settled);
+      expect(result.current.status).toBe('backend-unavailable');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reports session-expired on 401 without auto-retrying', async () => {
+    vi.useFakeTimers();
+    try {
+      clerkSignedIn();
+      apiMock.api.get.mockRejectedValue(new apiMock.ApiError(401, 'Token expired'));
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(result.current.status).toBe('session-expired');
+      expect(result.current.user).toBeNull();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
+      });
+      // Auth failures are terminal until the user acts — no auto-retry.
+      expect(apiMock.api.get).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('retry() refetches after a failure and recovers to authenticated', async () => {
+    clerkSignedIn();
+    apiMock.api.get.mockRejectedValueOnce(new apiMock.ApiError(0, 'Network unavailable'));
+    apiMock.api.get.mockResolvedValue({ data: TEST_USER });
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.status).toBe('backend-unavailable'));
+
+    act(() => {
+      result.current.retry();
+    });
+
+    await waitFor(() => expect(result.current.status).toBe('authenticated'));
+    expect(result.current.user).toEqual(TEST_USER);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('logout() from an error state clears local tokens and reports logged-out', async () => {
+    clerkSignedIn();
+    apiMock.api.get.mockRejectedValue(new apiMock.ApiError(0, 'Network unavailable'));
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.status).toBe('backend-unavailable'));
+
+    await act(async () => {
+      await result.current.logout();
+    });
+
+    expect(apiMock.clearTokens).toHaveBeenCalled();
+    expect(result.current.status).toBe('logged-out');
+    expect(result.current.user).toBeNull();
+    expect(result.current.error).toBeNull();
   });
 });

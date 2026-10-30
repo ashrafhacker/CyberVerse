@@ -3,14 +3,16 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Zap, Flame, Target, BookOpen } from 'lucide-react';
-import { useRequireAuth } from '@/lib/auth';
+import { useAuth, useRequireAuth } from '@/lib/auth';
 import Navbar from '@/components/Navbar';
+import AuthProblemScreen from '@/components/AuthProblemScreen';
 import { TerminalCard, StatCard, XPBar, LoadingScreen } from '@/components/TerminalCard';
 import { api } from '@/lib/api';
 import type { Course, DailyChallenge, PlayerProgress, Profile } from '@/lib/types';
 
 export default function DashboardPage() {
-  const { user, loading } = useRequireAuth();
+  const { user, loading, status, error: authError, retry: retryAuth } = useRequireAuth();
+  const { logout } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [progress, setProgress] = useState<PlayerProgress | null>(null);
   const [daily, setDaily] = useState<DailyChallenge[]>([]);
@@ -34,7 +36,25 @@ export default function DashboardPage() {
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load dashboard'));
   }, [user]);
 
-  if (loading || !user) return <LoadingScreen />;
+  // Loading: only while the session/profile is genuinely in flight.
+  if (loading) return <LoadingScreen />;
+
+  // Signed-out users are redirected to /login by useRequireAuth. Any other
+  // missing user is a distinct, actionable failure state — never an eternal
+  // "establishing secure connection..." spinner.
+  if (!user) {
+    return (
+      <>
+        <Navbar />
+        <AuthProblemScreen
+          status={status}
+          error={authError}
+          onRetry={retryAuth}
+          onSignOut={() => void logout()}
+        />
+      </>
+    );
+  }
   if (error) {
     return (
       <>
