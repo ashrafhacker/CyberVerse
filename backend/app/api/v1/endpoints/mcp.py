@@ -20,7 +20,7 @@ router = APIRouter(prefix="/mcp", tags=["mcp"])
 # OAuth protected-resource metadata discovery per user spec.
 _CLERK_ISSUER = clerk_frontend_api()
 _AUTH_SERVER_URL = "https://clerk.cyberverse.com"
-_RESOURCE_URI = "https://cyberverse-api.cyberverse.blitz.cloud/mcp"
+_RESOURCE_URI = "https://cyberverse-api.onrender.com/mcp"
 _RESOURCE_AUDIENCE = "https://opencode"
 
 # FastMCP server (stateless per call as required by SDK docs)

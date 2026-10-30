@@ -48,7 +48,7 @@ services:
       # deploy (https://<project>.vercel.app). Wildcards are rejected by
       # config validation; localhost is always allowed by regex.
       - key: CORS_ORIGINS
-        value: '["https://cyberverse.vercel.app"]'
+        value: '["https://cyberverse-neohacker-proejects.vercel.app"]'
       - key: BCRYPT_ROUNDS
         value: "12"
       - key: DATABASE_POOL_SIZE

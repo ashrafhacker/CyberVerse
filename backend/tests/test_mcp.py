@@ -11,7 +11,7 @@ def test_metadata_discovery():
     r = client.get("/api/v1/mcp/.well-known/oauth-protected-resource/mcp")
     assert r.status_code == 200
     data = r.json()
-    assert data["resource"] == "https://cyberverse-api.cyberverse.blitz.cloud/mcp"
+    assert data["resource"] == "https://cyberverse-api.onrender.com/mcp"
     assert "https://clerk.cyberverse.com" in data["authorization_servers"]
     assert "openid" in data.get("scopes_supported", [])
 

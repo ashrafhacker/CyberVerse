@@ -1,15 +1,16 @@
 # CyberVerse — Deployment Runbook
 
-> **Status as of 2026-10-28** — the full stack is live: frontend on Vercel,
-> backend on **blitz** (Render was abandoned — its API returns HTTP 402, see §6).
-> Verified end-to-end 2026-10-28; see §7 for the blitz runbook.
+> **Status as of 2026-10-30** — frontend live on Vercel; backend **migrating
+> from blitz → Render free tier** (`render.yaml` blueprint; deployment
+> verification pending — see §6/§7). All `blitz.cloud` URLs are retired.
+> Target API domain: `https://api.cyberverse.qd.je` (DNS verification pending).
 
 Target architecture:
 
 | Layer      | Provider            | State                                                        |
 | ---------- | ------------------- | ------------------------------------------------------------ |
 | Frontend   | Vercel (team `neohacker-proejects`, project `cyberverse`) | **Live** — https://cyberverse-neohacker-proejects.vercel.app (also `cyberverse-beta.vercel.app`). The Vercel GitHub integration deploys every push to `main` (Production) and every branch push (Preview). |
-| Backend    | blitz (app `cyberverse-api`, project `CyberVerse`) | **Live** — https://cyberverse-api.cyberverse.blitz.cloud — Free plan, GitHub auto-build on push to `main`, latest deployed build `a37e675`. See §7. |
+| Backend    | Render free tier (blueprint `render.yaml`, service `cyberverse-api`) | **Migrating** — target URL `https://cyberverse-api.onrender.com` (custom domain `api.cyberverse.qd.je` pending DNS). Previous blitz backend retired 2026-10-30. See §6. |
 | Database   | Neon (us-east-1)    | **Live & verified** — project `crimson-firefly-97189410`, branch `cyberverse-production`, DB `cyberverse`, 75 tables, head=`0007_library_enum_names`. The unrelated `neondb` DB is untouched. |
 | Cache/jobs | Render Redis (default) or Upstash | Config via `REDIS_URL`/`CELERY_*` — created with the Render service; no Upstash creds present |
 | Git       | GitHub `ashrafhacker/CyberVerse` (public) | **Live** — `main` tracks the latest CI-green commit, pushed over HTTPS with the `gh` keyring token (`gh auth setup-git`) |
@@ -175,9 +176,14 @@ green until each credential exists.
 
 ---
 
-## 7. blitz backend runbook (live since 2026-10-28)
+## 7. blitz backend runbook (**RETIRED 2026-10-30** — historical reference only)
 
-**Identity**
+> ⚠️ **Deprecated.** The blitz backend was retired on 2026-10-30 when the stack
+> moved to Render free tier. Do not use the URLs/commands below for new work;
+> they are kept only for rollback archaeology. Current backend facts live in §6
+> and `render.yaml`.
+
+**Identity (historical)**
 
 | Item | Value |
 | ---- | ----- |
