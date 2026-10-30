@@ -1,4 +1,5 @@
-"""Real JWKS-server tests for Clerk session-token verification.
+"""
+Real JWKS-server tests for Clerk session-token verification.
 
 Unlike ``test_clerk.py`` (which mocks ``_get_signing_jwk``), these tests run
 the ENTIRE verification path against a controlled local JWKS server:
@@ -21,9 +22,11 @@ from __future__ import annotations
 
 import base64
 import json
+import socket
 import threading
 from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import ClassVar
 
 import pytest
 from cryptography.hazmat.primitives import serialization
@@ -32,6 +35,9 @@ from jose import jwt as jose_jwt
 
 from app.core import clerk as clerk_mod
 from app.core.clerk import ClerkError, verify_clerk_session_token
+
+# Server hit-count expected after the rotation test forces a kid-miss refresh.
+_HITS_AFTER_REFRESH = 2
 
 
 def _b64url_uint(value: int) -> str:
@@ -73,10 +79,10 @@ def rsa_keys():
 class _JWKSHandler(BaseHTTPRequestHandler):
     """Serves a mutable JWKS payload and counts hits (rotation = swap payload)."""
 
-    payload: dict = {"keys": []}
+    payload: ClassVar[dict] = {"keys": []}
     hits: int = 0
 
-    def do_GET(self) -> None:  # noqa: N802 — http.server API
+    def do_GET(self) -> None:
         if self.path == "/.well-known/jwks.json":
             type(self).hits += 1
             body = json.dumps(type(self).payload).encode()
@@ -94,7 +100,7 @@ class _JWKSHandler(BaseHTTPRequestHandler):
         pass
 
 
-@pytest.fixture()
+@pytest.fixture
 def jwks_server(rsa_keys):
     """Controlled JWKS server: (origin, keys) with per-test hit reset."""
     _JWKSHandler.payload = {"keys": [rsa_keys["key1"][1]]}
@@ -112,11 +118,11 @@ def jwks_server(rsa_keys):
 @pytest.fixture(autouse=True)
 def _reset_jwks_module_state():
     """Run every test with a cold in-process JWKS cache (and leave it cold)."""
-    clerk_mod._jwks_cache.clear()
-    clerk_mod._jwks_fetched_at = 0.0
+    clerk_mod._jwks_cache.clear()  # noqa: SLF001
+    clerk_mod._jwks_fetched_at = 0.0  # noqa: SLF001
     yield
-    clerk_mod._jwks_cache.clear()
-    clerk_mod._jwks_fetched_at = 0.0
+    clerk_mod._jwks_cache.clear()  # noqa: SLF001
+    clerk_mod._jwks_fetched_at = 0.0  # noqa: SLF001
 
 
 def _signed(private_key, kid: str, claims: dict) -> str:
@@ -134,6 +140,7 @@ def _claims(origin: str, minutes: int = 5, sub: str = "user_srv_1", iss: str | N
 
 
 async def test_valid_token_accepted_via_real_jwks_server(jwks_server, monkeypatch):
+    """A real RS256 token verifies after a real HTTP JWKS fetch (hit asserted)."""
     origin, keys = jwks_server
     monkeypatch.setattr(clerk_mod, "clerk_frontend_api", lambda: origin, raising=False)
     key1, _ = keys["key1"]
@@ -144,10 +151,11 @@ async def test_valid_token_accepted_via_real_jwks_server(jwks_server, monkeypatc
     assert payload["sub"] == "user_srv_1"
     assert _JWKSHandler.hits == 1  # fetched over real HTTP, not mocked
     # Cache is now warm in-process.
-    assert "srv-key-1" in clerk_mod._jwks_cache
+    assert "srv-key-1" in clerk_mod._jwks_cache  # noqa: SLF001
 
 
 async def test_jwks_rotation_new_kid_forces_refresh_and_is_accepted(jwks_server, monkeypatch):
+    """Unknown kid after rotation triggers a real forced refresh and verifies."""
     origin, keys = jwks_server
     monkeypatch.setattr(clerk_mod, "clerk_frontend_api", lambda: origin, raising=False)
     key1, _ = keys["key1"]
@@ -165,10 +173,11 @@ async def test_jwks_rotation_new_kid_forces_refresh_and_is_accepted(jwks_server,
     payload = await verify_clerk_session_token(second)
 
     assert payload["sub"] == "user_srv_2"
-    assert _JWKSHandler.hits == 2  # unknown kid forced a real refresh
+    assert _JWKSHandler.hits == _HITS_AFTER_REFRESH  # unknown kid forced a real refresh
 
 
 async def test_expired_token_rejected_via_real_jwks(jwks_server, monkeypatch):
+    """An expired-but-correctly-signed token is rejected with ClerkError."""
     origin, keys = jwks_server
     monkeypatch.setattr(clerk_mod, "clerk_frontend_api", lambda: origin, raising=False)
     key1, _ = keys["key1"]
@@ -179,6 +188,7 @@ async def test_expired_token_rejected_via_real_jwks(jwks_server, monkeypatch):
 
 
 async def test_wrong_issuer_rejected_via_real_jwks(jwks_server, monkeypatch):
+    """A valid signature from the trusted key still fails the issuer check."""
     origin, keys = jwks_server
     monkeypatch.setattr(clerk_mod, "clerk_frontend_api", lambda: origin, raising=False)
     key1, _ = keys["key1"]
@@ -189,6 +199,7 @@ async def test_wrong_issuer_rejected_via_real_jwks(jwks_server, monkeypatch):
 
 
 async def test_wrong_signing_key_rejected_via_real_jwks(jwks_server, monkeypatch):
+    """A token signed by a non-served key is rejected without a refresh loop."""
     origin, keys = jwks_server
     monkeypatch.setattr(clerk_mod, "clerk_frontend_api", lambda: origin, raising=False)
     key2, _ = keys["key2"]  # attacker's key; server only trusts key-1
@@ -200,16 +211,17 @@ async def test_wrong_signing_key_rejected_via_real_jwks(jwks_server, monkeypatch
 
 
 async def test_jwks_server_outage_maps_to_clerk_error(jwks_server, monkeypatch):
+    """
+    JWKS endpoint unreachable on a cold cache surfaces as ClerkError.
+
+    Auth deps translate this to 401/503 — never an unhandled 500.
+    """
     origin, keys = jwks_server
     monkeypatch.setattr(clerk_mod, "clerk_frontend_api", lambda: origin, raising=False)
     key1, _ = keys["key1"]
     token = _signed(key1, "srv-key-1", _claims(origin))
 
-    # Cold cache + dead JWKS endpoint must surface as ClerkError (which auth
-    # deps map to 401/503), never an unhandled 500. Point at a freshly-closed
-    # port so the real httpx fetch gets connection-refused.
-    import socket
-
+    # Point at a freshly-closed port so the real httpx fetch gets connection-refused.
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
     dead_port = sock.getsockname()[1]
