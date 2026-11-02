@@ -190,6 +190,48 @@ ROLE_HIERARCHY: dict[UserRole, int] = {
 }
 
 
+def ensure_can_modify(actor: User, target: User) -> None:
+    """
+    Target-state guard for role/status/delete mutations (admin tier+).
+
+    Contract (locked, applied identically on the admin and users routers):
+        self-change                      -> 400
+        actor rank > target rank         -> allow
+        actor is super_admin (non-self)  -> allow
+        otherwise                        -> 403
+
+    Args:
+        actor: The authenticated user performing the change.
+        target: The user being changed.
+
+    Raises:
+        HTTPException: 400 on self-change, 403 when the hierarchy forbids it.
+
+    """
+    if actor.id == target.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot modify your own account",
+        )
+    actor_rank = ROLE_HIERARCHY.get(actor.role, 0)
+    target_rank = ROLE_HIERARCHY.get(target.role, 0)
+    if actor.role is UserRole.SUPER_ADMIN or actor_rank > target_rank:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Insufficient permissions to modify this user",
+    )
+
+
+def can_modify(actor: User, target: User) -> bool:
+    """Boolean form of :func:`ensure_can_modify` for bulk operations."""
+    if actor.id == target.id:
+        return False
+    if actor.role is UserRole.SUPER_ADMIN:
+        return True
+    return ROLE_HIERARCHY.get(actor.role, 0) > ROLE_HIERARCHY.get(target.role, 0)
+
+
 def require_role(min_role: UserRole):
     """
     Create a dependency that requires a minimum role level.

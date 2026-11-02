@@ -6,11 +6,48 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser
 from app.core.database import get_db
-from app.models.notification import Notification
+from app.models.notification import Announcement, Notification
 from app.schemas.base import APIResponse, MessageResponse, PaginatedResponse
 from app.services.notification_service import NotificationService
 
 router = APIRouter()
+
+
+@router.get(
+    "/announcements",
+    response_model=APIResponse[list],
+    summary="List published announcements (public)",
+)
+async def list_published_announcements(db: AsyncSession = Depends(get_db)):
+    """Public feed: published, active announcements only (drafts and soft-
+    deleted items are never exposed)."""
+    result = await db.execute(
+        select(Announcement)
+        .where(
+            Announcement.is_active.is_(True),
+            Announcement.is_draft.is_(False),
+        )
+        .order_by(Announcement.is_pinned.desc(), Announcement.created_at.desc())
+        .limit(50)
+    )
+    announcements = result.scalars().all()
+    return APIResponse[list](
+        data=[
+            {
+                "id": str(a.id),
+                "title": a.title,
+                "body": a.body,
+                "announcement_type": a.announcement_type,
+                "is_pinned": a.is_pinned,
+                "image_url": a.image_url,
+                "link": a.link,
+                "published_at": a.published_at.isoformat() if a.published_at else None,
+                "expires_at": a.expires_at.isoformat() if a.expires_at else None,
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+            }
+            for a in announcements
+        ]
+    )
 
 
 @router.get("/", response_model=APIResponse[PaginatedResponse], summary="List my notifications")
