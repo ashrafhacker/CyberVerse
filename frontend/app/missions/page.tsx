@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Swords, Play } from 'lucide-react';
 import Navbar from '@/components/Navbar';
-import { TerminalCard, LoadingScreen } from '@/components/TerminalCard';
+import { TerminalCard, LoadingScreen, AuthRequired } from '@/components/TerminalCard';
 import { useRequireAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
 import type { DailyChallenge, Mission } from '@/lib/types';
@@ -34,7 +34,8 @@ export default function MissionsPage() {
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load missions'));
   }, [user]);
 
-  if (loading || !user) return <LoadingScreen />;
+  if (loading) return <LoadingScreen />;
+  if (!user) return <AuthRequired />;
 
   return (
     <>

@@ -97,13 +97,38 @@ const REFRESH_KEY = 'cyberverse_refresh_token';
 const CIRCUIT_BREAKER_THRESHOLD = 5;
 const CIRCUIT_BREAKER_COOLDOWN_MS = 30_000;
 
+/** Readable (non-HttpOnly) double-submit CSRF cookie set by the backend. */
+export const CSRF_COOKIE_NAME = 'cv_csrf';
+/** Header the backend compares against the CSRF cookie. */
+export const CSRF_HEADER_NAME = 'X-CSRF-Token';
+
+/**
+ * String literals that must never be interpreted as a credential.
+ *
+ * `localStorage.setItem(key, null)` stores the four-character string "null",
+ * which is truthy — treating it as a token produced `Authorization: Bearer
+ * null`, which the backend resolves *in preference to* a valid session
+ * cookie, breaking every authenticated request.
+ */
+const INVALID_TOKEN_LITERALS = new Set(['null', 'undefined', 'nan', 'none', 'nil', 'false', 'true']);
+
+/** Methods that carry state and therefore need the CSRF header. */
+const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
 // Cache TTL defaults
 const DEFAULT_CACHE_TTL_MS = 60_000; // 1 minute
 const DEFAULT_STALE_TTL_MS = 30_000; // 30 seconds
 
 let failureCount = 0;
 let circuitOpenUntil = 0;
-let refreshPromise: Promise<string | null> | null = null;
+let refreshPromise: Promise<boolean> | null = null;
+
+/**
+ * Incremented whenever the session identity changes (sign-in, sign-out,
+ * refresh). Cache and in-flight keys include it so a response produced for a
+ * previous session can never be served to the current one.
+ */
+let sessionEpoch = 0;
 
 // In-flight dedup map
 const inflight = new Map<string, Promise<unknown>>();
@@ -122,20 +147,47 @@ export function addInterceptor(i: Interceptor): void { interceptors.push(i); }
 // Token Management (typed, defensive)
 // ---------------------------------------------------------------------------
 
+/**
+ * True only for a value that can be sent as a bearer credential.
+ *
+ * Absent, empty, whitespace-only and the string literals produced by
+ * `String(null)` / `String(undefined)` are all rejected.
+ */
+export function isUsableToken(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  if (INVALID_TOKEN_LITERALS.has(trimmed.toLowerCase())) return false;
+  if (/\s/.test(trimmed)) return false;
+  return true;
+}
+
 export function getTokens(): { access: string | null; refresh: string | null } {
   if (typeof window === 'undefined') return { access: null, refresh: null };
   try {
+    const access = localStorage.getItem(TOKEN_KEY);
+    const refresh = localStorage.getItem(REFRESH_KEY);
     return {
-      access: localStorage.getItem(TOKEN_KEY),
-      refresh: localStorage.getItem(REFRESH_KEY),
+      access: isUsableToken(access) ? access.trim() : null,
+      refresh: isUsableToken(refresh) ? refresh.trim() : null,
     };
   } catch { return { access: null, refresh: null }; }
 }
 
-export function setTokens(access: string, refresh: string): void {
+/**
+ * Persist bearer tokens.
+ *
+ * The web client authenticates with an HttpOnly cookie, so the body tokens
+ * are normally absent. A missing or malformed token is never written to
+ * storage — the key is removed instead, because a stored "null" string is
+ * truthy and would be sent as `Authorization: Bearer null`.
+ */
+export function setTokens(access: string | null | undefined, refresh: string | null | undefined): void {
   try {
-    localStorage.setItem(TOKEN_KEY, access);
-    localStorage.setItem(REFRESH_KEY, refresh);
+    if (isUsableToken(access)) localStorage.setItem(TOKEN_KEY, access.trim());
+    else localStorage.removeItem(TOKEN_KEY);
+    if (isUsableToken(refresh)) localStorage.setItem(REFRESH_KEY, refresh.trim());
+    else localStorage.removeItem(REFRESH_KEY);
     // Notify other tabs via storage event (optional cross-tab sync)
     window.dispatchEvent(new CustomEvent('cyberverse:tokens-updated'));
   } catch {/* quota exceeded or private mode */}
@@ -149,7 +201,36 @@ export function clearTokens(): void {
   } catch {/* ignore */}
 }
 
+/** Legacy bearer clients only — the browser session itself lives in a cookie. */
 export function isAuthenticated(): boolean { return !!getTokens().access; }
+
+// ---------------------------------------------------------------------------
+// Cookies & CSRF
+// ---------------------------------------------------------------------------
+
+/** Read a non-HttpOnly cookie by name. Returns null when absent. */
+export function getCookie(name: string): string | null {
+  if (typeof document === 'undefined' || typeof document.cookie !== 'string') return null;
+  const prefix = `${name}=`;
+  for (const part of document.cookie.split(';')) {
+    const trimmed = part.trim();
+    if (!trimmed.startsWith(prefix)) continue;
+    const raw = trimmed.slice(prefix.length);
+    try {
+      return decodeURIComponent(raw);
+    } catch {
+      return raw;
+    }
+  }
+  return null;
+}
+
+/** The current double-submit CSRF token, or null when the cookie is absent. */
+export function getCsrfToken(): string | null {
+  const token = getCookie(CSRF_COOKIE_NAME);
+  return token && token.length >= 16 ? token : null;
+}
+
 
 // ---------------------------------------------------------------------------
 // Helpers: Timeout, Delay, Backoff
@@ -186,30 +267,60 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = REQU
 // Token Refresh (queued, single-flight)
 // ---------------------------------------------------------------------------
 
-async function refreshAccessToken(): Promise<string | null> {
+/**
+ * Refresh the session.
+ *
+ * The browser session lives in an HttpOnly cookie, so the refresh token is NOT
+ * available to JavaScript: the request is authenticated by the `cv_refresh`
+ * cookie and the backend answers with a rotated cookie pair. The response
+ * body only carries tokens for clients that explicitly opted in, so a missing
+ * body token is not a failure.
+ *
+ * Returns true when the session was refreshed. Concurrent callers share a
+ * single in-flight request, so a burst of 401s cannot cause a refresh storm.
+ */
+async function refreshAccessToken(): Promise<boolean> {
   if (refreshPromise) return refreshPromise;
 
   refreshPromise = (async () => {
-    const { refresh } = getTokens();
-    if (!refresh) return null;
     try {
+      // Legacy bearer clients still holding a refresh token may pass it in the
+      // body; the backend prefers the cookie and falls back to this.
+      const legacyRefresh = getTokens().refresh;
       const res = await fetchWithTimeout(`${API_URL}/auth/refresh`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: refresh }),
+        headers: buildHeaders('POST'),
+        body: JSON.stringify(legacyRefresh ? { refresh_token: legacyRefresh } : {}),
+        credentials: 'include',
       }, 10_000);
-      if (!res.ok) { clearTokens(); return null; }
-      const body = (await res.json()) as Record<string, unknown>;
-      const tokens = (body?.data ?? body) as Record<string, unknown>;
-      const access = tokens?.access_token as string | undefined;
-      if (!access) { clearTokens(); return null; }
-      const nextRefresh = (tokens?.refresh_token as string | undefined) ?? refresh;
-      setTokens(access, nextRefresh);
+
+      if (res.status === 401) {
+        // The refresh session is expired, revoked or was never established.
+        // Nothing can recover it, so drop any legacy tokens.
+        clearTokens();
+        invalidateSession();
+        return false;
+      }
+      if (!res.ok) {
+        // Transient failure (CSRF misconfiguration, 5xx, rate limit). Keep the
+        // session: signing the user out on a blip is worse than one failed
+        // request.
+        return false;
+      }
+
+      const body = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+      const tokens = (body?.data ?? body) as Record<string, unknown> | undefined;
+      const access = tokens?.access_token;
+      const refresh = tokens?.refresh_token;
+      if (isUsableToken(access)) {
+        setTokens(access, isUsableToken(refresh) ? refresh : null);
+      }
+      // A rotated cookie pair is a new session identity.
+      invalidateSession();
       failureCount = 0; // reset circuit breaker on success
-      return access;
+      return true;
     } catch {
-      clearTokens();
-      return null;
+      return false;
     } finally {
       refreshPromise = null;
     }
@@ -241,7 +352,11 @@ function recordSuccess(): void {
 // Cache Helpers (SWR)
 // ---------------------------------------------------------------------------
 
-function cacheKeyFor(path: string, method: string): string { return `${method}:${path}`; }
+/**
+ * Cache key for a request. The session epoch is part of the key so a payload
+ * fetched for one session can never be served to another one.
+ */
+function cacheKeyFor(path: string, method: string): string { return `${method}:${path}@${sessionEpoch}`; }
 
 /** Append `params` as a query string, dropping undefined/null values. */
 function withParams(path: string, params?: RequestOptions['params']): string {
@@ -255,15 +370,28 @@ function withParams(path: string, params?: RequestOptions['params']): string {
   return qs ? `${path}${path.includes('?') ? '&' : '?'}${qs}` : path;
 }
 
-function getCached<T>(key: string): T | undefined {
+/**
+ * Read a cache entry.
+ *
+ * `fresh` is true while the entry is inside its TTL. A stale-but-usable entry
+ * (past the TTL, inside the stale window) may still be served while it
+ * revalidates in the background.
+ */
+function getCached<T>(key: string): { data: T; fresh: boolean } | undefined {
   const entry = cacheStore.get(key) as CacheEntry<T> | undefined;
   if (!entry) return undefined;
-  if (Date.now() > entry.expiresAt) { cacheStore.delete(key); return undefined; }
-  return entry.data;
+  const now = Date.now();
+  if (now > entry.staleAt) { cacheStore.delete(key); return undefined; }
+  return { data: entry.data, fresh: now <= entry.expiresAt };
 }
 
 function setCached<T>(key: string, data: T, ttlMs = DEFAULT_CACHE_TTL_MS, staleMs = DEFAULT_STALE_TTL_MS): void {
-  cacheStore.set(key, { data, expiresAt: Date.now() + ttlMs, staleAt: Date.now() + staleMs });
+  const expiresAt = Date.now() + ttlMs;
+  // The stale window extends *beyond* the fresh window: a stale entry may still
+  // be served while it revalidates in the background. It must never be shorter
+  // than the fresh window, otherwise the value would expire before it is stale.
+  const staleAt = expiresAt + Math.max(0, staleMs);
+  cacheStore.set(key, { data, expiresAt, staleAt });
 }
 
 export function invalidateCache(pattern?: string | RegExp): void {
@@ -274,9 +402,44 @@ export function invalidateCache(pattern?: string | RegExp): void {
   }
 }
 
+/**
+ * Mark the current session as ended/replaced.
+ *
+ * Bumps the session epoch (so cache and in-flight keys stop matching) and
+ * drops every cached response. Call this on sign-in, sign-out and refresh.
+ */
+export function invalidateSession(): void {
+  sessionEpoch += 1;
+  cacheStore.clear();
+  inflight.clear();
+}
+
+/** Current session epoch — exposed for tests and diagnostics. */
+export function getSessionEpoch(): number { return sessionEpoch; }
+
 // ---------------------------------------------------------------------------
 // Core Request Engine
 // ---------------------------------------------------------------------------
+
+/**
+ * Build the request headers.
+ *
+ * The CSRF header is only attached to state-changing methods and only when the
+ * readable `cv_csrf` cookie is present — the backend compares the two and
+ * skips the check for requests that carry an `Authorization` header.
+ */
+function buildHeaders(method: string, extra?: Record<string, string>): Record<string, string> {
+  const finalHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Request-ID': (typeof crypto !== 'undefined' && 'randomUUID' in crypto) ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+    ...extra,
+  };
+  if (UNSAFE_METHODS.has(method)) {
+    const csrf = getCsrfToken();
+    if (csrf) finalHeaders[CSRF_HEADER_NAME] = csrf;
+  }
+  return finalHeaders;
+}
 
 export async function apiRequest<T = unknown>(rawPath: string, options: RequestOptions = {}): Promise<T> {
   const {
@@ -307,44 +470,49 @@ export async function apiRequest<T = unknown>(rawPath: string, options: RequestO
   if (method === 'GET' && cache !== 'no-store') {
     const cached = getCached<T>(cKey);
     if (cached !== undefined) {
-      if (cache === 'swr') {
+      if (cache === 'swr' && !cached.fresh) {
         // background revalidation — don't await
         void apiRequest<T>(rawPath, { ...options, cache: 'no-store' })
           .then(d => setCached(cKey, d))
           .catch(() => {/* ignore background error */});
       }
-      return cached;
+      return cached.data;
     }
   }
 
-  // Deduplication: coalesce concurrent identical requests
-  const dKey = dedupeKey ?? `${method}:${path}:${JSON.stringify(body ?? '')}`;
+  // Deduplication: coalesce concurrent identical requests. The session epoch
+  // is part of the key so a request started before sign-in is never joined by
+  // one started after it.
+  const dKey = dedupeKey ?? `${method}:${path}:${JSON.stringify(body ?? '')}@${sessionEpoch}`;
   if (method === 'GET' && inflight.has(dKey)) {
     return inflight.get(dKey) as Promise<T>;
   }
 
   const exec = async (): Promise<T> => {
-    const makeRequest = async (token?: string): Promise<Response> => {
-      const finalHeaders: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'X-Request-ID': (typeof crypto !== 'undefined' && 'randomUUID' in crypto) ? crypto.randomUUID() : Math.random().toString(36).slice(2),
-        ...headers,
-      };
-      if (auth && token) finalHeaders.Authorization = `Bearer ${token}`;
+    const makeRequest = async (token?: string | null): Promise<Response> => {
+      const finalHeaders = buildHeaders(method, headers);
+      // Only a usable bearer token may become an Authorization header. A
+      // malformed one would take precedence over the valid session cookie on
+      // the server and break the request.
+      if (auth && isUsableToken(token)) finalHeaders.Authorization = `Bearer ${token.trim()}`;
       return fetchWithTimeout(`${API_URL}${path}`, {
         method,
         headers: finalHeaders,
         body: body !== undefined ? JSON.stringify(body) : undefined,
         signal,
+        // The session travels in cookies: they must be sent on every request,
+        // including cross-origin deployments.
+        credentials: 'include',
       }, timeoutMs);
     };
 
     let res: Response;
     let attempt = 0;
+    let refreshAttempted = false;
 
     const attemptRequest = async (): Promise<Response> => {
       try {
-        const tok = getTokens().access ?? undefined;
+        const tok = getTokens().access;
         res = await makeRequest(tok);
       } catch (err) {
         if (err instanceof DOMException && err.name === 'TimeoutError') {
@@ -356,15 +524,20 @@ export async function apiRequest<T = unknown>(rawPath: string, options: RequestO
         throw new NetworkError((err as Error).message || 'Network error');
       }
 
-      // 401 -> try refresh once (single-flight)
-      if (res.status === 401 && auth) {
-        const newToken = await refreshAccessToken();
-        if (newToken) {
-          res = await makeRequest(newToken);
+      // 401 -> refresh the session once, then retry once. Never loop: a second
+      // 401 is surfaced to the caller.
+      if (res.status === 401 && auth && !refreshAttempted) {
+        refreshAttempted = true;
+        const refreshed = await refreshAccessToken();
+        if (refreshed) {
+          // The cookie is authoritative for the browser client; a bearer token
+          // is only used when the server handed one back.
+          res = await makeRequest(getTokens().access);
         }
       }
       return res;
     };
+
 
     // Retry loop with exponential backoff for retryable statuses
     while (true) {

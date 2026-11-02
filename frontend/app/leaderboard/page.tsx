@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Trophy, Medal } from 'lucide-react';
 import Navbar from '@/components/Navbar';
-import { TerminalCard, LoadingScreen } from '@/components/TerminalCard';
+import { TerminalCard, LoadingScreen, AuthRequired } from '@/components/TerminalCard';
 import { useRequireAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
 import type { LeaderboardEntry } from '@/lib/types';
@@ -38,7 +38,8 @@ export default function LeaderboardPage() {
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load leaderboard'));
   }, [user]);
 
-  if (loading || !user) return <LoadingScreen />;
+  if (loading) return <LoadingScreen />;
+  if (!user) return <AuthRequired />;
 
   return (
     <>

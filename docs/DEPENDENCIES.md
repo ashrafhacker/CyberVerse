@@ -22,4 +22,4 @@
 | Juice Shop (optional target) | github.com/juice-shop/juice-shop | MIT | Intentionally vulnerable target | latest |
 
 All dependencies are open source. No paid SaaS is required for local development.
-Razorpay/SendGrid integrations exist in requirements but are optional and disabled by default.
+Payments use the self-hosted YouPI PG UPI gateway over REST + signed webhooks; no Razorpay SDK is required. The SendGrid integration remains optional and disabled by default.

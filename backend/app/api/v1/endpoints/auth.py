@@ -1,12 +1,22 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, get_current_user
 from app.core.config import settings
+from app.core.cookies import (
+    ACCESS_COOKIE,
+    CSRF_COOKIE,
+    REFRESH_COOKIE,
+    clear_auth_cookies,
+    issue_csrf_token,
+    set_auth_cookies,
+    set_csrf_cookie,
+)
 from app.core.database import get_db
+from app.core.exceptions import CyberVerseError
 from app.core.redis import RateLimiter
 from app.core.security import (
     create_access_token,
@@ -57,6 +67,30 @@ def _request_meta(request: Request) -> dict:
     }
 
 
+def _token_response(result: dict, include_tokens: bool) -> APIResponse[TokenResponse]:
+    """Build the auth response.
+
+    Tokens are transported in HttpOnly Set-Cookie headers (see
+    ``set_auth_cookies``); the body only carries the raw JWTs when the client
+    explicitly asked for them (non-browser clients, migration tooling).
+    """
+    return APIResponse[TokenResponse](
+        data=TokenResponse(
+            access_token=result["access_token"] if include_tokens else None,
+            refresh_token=result["refresh_token"] if include_tokens else None,
+            expires_in=result["expires_in"],
+            user=UserResponse.model_validate(result["user"]),
+        )
+    )
+
+
+def _bearer_or_cookie(request: Request) -> str | None:
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.startswith("Bearer "):
+        return auth_header.removeprefix("Bearer ").strip() or None
+    return request.cookies.get(ACCESS_COOKIE)
+
+
 @router.post(
     "/register",
     response_model=APIResponse[TokenResponse],
@@ -66,6 +100,7 @@ def _request_meta(request: Request) -> dict:
 async def register(
     request: RegisterRequest,
     fastapi_request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     allowed = await RateLimiter.check(
@@ -82,20 +117,17 @@ async def register(
     verification_token = create_access_token(str(result["user"].id), {"type": "email_verification"})
     dispatch_email(send_verification_email, request.email, verification_token)
 
-    return APIResponse[TokenResponse](
-        data=TokenResponse(
-            access_token=result["access_token"],
-            refresh_token=result["refresh_token"],
-            expires_in=result["expires_in"],
-            user=UserResponse.model_validate(result["user"]),
-        )
-    )
+    # Session travels in HttpOnly cookies — the body only carries tokens for
+    # clients that opted in with include_tokens=true.
+    set_auth_cookies(response, result["access_token"], result["refresh_token"])
+    return _token_response(result, request.include_tokens)
 
 
 @router.post("/login", response_model=APIResponse[TokenResponse], summary="Login with email and password")
 async def login(
     request: LoginRequest,
     fastapi_request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     import structlog
@@ -113,15 +145,15 @@ async def login(
 
         result = await AuthService.login(db, request, _request_meta(fastapi_request))
 
-        return APIResponse[TokenResponse](
-            data=TokenResponse(
-                access_token=result["access_token"],
-                refresh_token=result["refresh_token"],
-                expires_in=result["expires_in"],
-                user=UserResponse.model_validate(result["user"]),
-            )
-        )
+        set_auth_cookies(response, result["access_token"], result["refresh_token"])
+        return _token_response(result, request.include_tokens)
     except HTTPException:
+        raise
+    except CyberVerseError:
+        # Domain errors (invalid credentials, locked account, ...) carry their
+        # own status code and detail. Let them reach the global
+        # CyberVerseError handler instead of being flattened into a 500 —
+        # otherwise a wrong password looks like a server outage.
         raise
     except Exception as exc:
         err = str(exc)
@@ -139,6 +171,7 @@ async def login(
 async def google_login(
     request: GoogleLoginRequest,
     fastapi_request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     import httpx
@@ -159,7 +192,10 @@ async def google_login(
                 data = resp.json()
                 log.info("google.tokeninfo.success", aud=data.get("aud"))
             else:
-                log.warning("google.tokeninfo.invalid", status=resp.status_code, body=resp.text[:500])
+                # Redact the presented credential so no token material (or
+                # Google's echo of it) ever reaches the logs.
+                body = (resp.text[:500]).replace(request.credential, "[redacted]")
+                log.warning("google.tokeninfo.invalid", status=resp.status_code, body=body)
     except Exception as exc:  # noqa: BLE001 — network failure (WinError 1225, timeout, DNS)
         network_failed = True
         log.warning("google.tokeninfo.network_failed", error=str(exc))
@@ -182,14 +218,8 @@ async def google_login(
 
     try:
         result = await AuthService.google_login(db, email, full_name, avatar_url, _request_meta(fastapi_request))
-        return APIResponse[TokenResponse](
-            data=TokenResponse(
-                access_token=result["access_token"],
-                refresh_token=result["refresh_token"],
-                expires_in=result["expires_in"],
-                user=UserResponse.model_validate(result["user"]),
-            )
-        )
+        set_auth_cookies(response, result["access_token"], result["refresh_token"])
+        return _token_response(result, request.include_tokens)
     except HTTPException:
         raise
     except Exception as exc:
@@ -216,33 +246,52 @@ async def google_login(
         log.error("google.service.failed", error=err_str, exc_info=True)
         raise HTTPException(status_code=400, detail="Failed to verify Google authentication")
 
+@router.get("/csrf", response_model=APIResponse[dict], summary="Issue a CSRF token for cookie-authenticated writes")
+async def csrf_token(fastapi_request: Request, response: Response):
+    """Double-submit CSRF token for the cookie-based client.
+
+    The token lives in a readable cookie; the client echoes it back in the
+    ``X-CSRF-Token`` header on state-changing requests. An existing token is
+    re-used (never rotated here) so concurrent in-flight requests keep working.
+    """
+    existing = fastapi_request.cookies.get(CSRF_COOKIE)
+    token = existing if existing else issue_csrf_token()
+    set_csrf_cookie(response, token)
+    return APIResponse[dict](data={"csrf_token": token})
+
+
 @router.post("/refresh", response_model=APIResponse[TokenResponse], summary="Refresh access token")
 async def refresh(
-    request: RefreshTokenRequest,
     fastapi_request: Request,
+    response: Response,
+    request: RefreshTokenRequest | None = None,
     db: AsyncSession = Depends(get_db),
 ):
-    result = await AuthService.refresh(db, request.refresh_token, _request_meta(fastapi_request))
-    return APIResponse[TokenResponse](
-        data=TokenResponse(
-            access_token=result["access_token"],
-            refresh_token=result["refresh_token"],
-            expires_in=result["expires_in"],
-            user=UserResponse.model_validate(result["user"]),
-        )
-    )
+    # Cookie first (browser client); body token is the legacy/migration path
+    # for clients that still hold a refresh JWT from before the cookie switch.
+    refresh_token = fastapi_request.cookies.get(REFRESH_COOKIE) or (request.refresh_token if request else None)
+    result = await AuthService.refresh(db, refresh_token, _request_meta(fastapi_request))
+    # Rotation: new access/refresh cookies are issued and the presented
+    # refresh token's session is marked rotated (short reuse grace).
+    set_auth_cookies(response, result["access_token"], result["refresh_token"])
+    return _token_response(result, bool(request and request.include_tokens))
 
 
 @router.post("/logout", response_model=MessageResponse, summary="Logout current session")
 async def logout(
     fastapi_request: Request,
+    response: Response,
     credentials=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    auth_header = fastapi_request.headers.get("authorization", "")
-    token = auth_header.replace("Bearer ", "") if auth_header.startswith("Bearer ") else ""
-    if token:
-        await AuthService.logout(db, token)
+    # Revoke the session behind whichever token authenticated this request,
+    # then expire the cookies so no credential lingers in the browser.
+    await AuthService.logout(
+        db,
+        access_token=_bearer_or_cookie(fastapi_request),
+        refresh_token=fastapi_request.cookies.get(REFRESH_COOKIE),
+    )
+    clear_auth_cookies(response)
     return MessageResponse(message="Logged out successfully")
 
 

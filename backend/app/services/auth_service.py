@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -208,7 +208,10 @@ class AuthService:
         return {"user": user, **tokens}
 
     @staticmethod
-    async def refresh(db: AsyncSession, refresh_token: str, request_meta: dict) -> dict:
+    async def refresh(db: AsyncSession, refresh_token: str | None, request_meta: dict) -> dict:
+        if not refresh_token:
+            raise AuthenticationError("Invalid refresh token")
+
         try:
             payload = decode_token(refresh_token)
             if not verify_token_type(payload, "refresh"):
@@ -217,19 +220,63 @@ class AuthService:
         except Exception:
             raise AuthenticationError("Invalid refresh token")
 
+        # The session row is the revocation/rotation record for this refresh
+        # token. Fail closed when it is missing so a token that was never
+        # issued (or whose session was pruned) cannot mint a new one.
+        result = await db.execute(select(Session).where(Session.refresh_token == refresh_token))
+        session_row = result.scalar_one_or_none()
+        if session_row is None:
+            raise AuthenticationError("Invalid refresh token")
+
+        if session_row.is_revoked:
+            revoked_at = session_row.revoked_at
+            if revoked_at is not None and revoked_at.tzinfo is None:
+                revoked_at = revoked_at.replace(tzinfo=UTC)
+            rotated_by_us = session_row.revoked_by == "rotation"
+            within_grace = (
+                revoked_at is not None
+                and (datetime.now(UTC) - revoked_at).total_seconds()
+                <= settings.REFRESH_REUSE_GRACE_SECONDS
+            )
+            # A token rotated out by this endpoint may be reused inside the
+            # grace window (two tabs refreshing at once). Explicit logout or
+            # session revocation is never graceful.
+            if not (rotated_by_us and within_grace):
+                raise AuthenticationError("Refresh token has been revoked")
+
         result = await db.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
         if not user:
             raise NotFoundError("User not found")
 
+        if not session_row.is_revoked:
+            session_row.is_revoked = True
+            session_row.revoked_at = datetime.now(UTC)
+            session_row.revoked_by = "rotation"
+            await db.commit()
+
         tokens = await AuthService._issue_tokens(db, user, request_meta)
         return {"user": user, **tokens}
 
     @staticmethod
-    async def logout(db: AsyncSession, token: str) -> None:
+    async def logout(
+        db: AsyncSession,
+        access_token: str | None = None,
+        refresh_token: str | None = None,
+    ) -> None:
+        """Revoke the session behind either token (whichever is presented)."""
+        candidates = [t for t in (access_token, refresh_token) if t]
+        if not candidates:
+            return
         await db.execute(
             update(Session)
-            .where(Session.token == token, Session.is_revoked.is_(False))
+            .where(
+                or_(
+                    Session.token.in_(candidates),
+                    Session.refresh_token.in_(candidates),
+                ),
+                Session.is_revoked.is_(False),
+            )
             .values(is_revoked=True, revoked_at=datetime.now(UTC), revoked_by="user")
         )
         await db.commit()

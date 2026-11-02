@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Shield, AlertTriangle } from 'lucide-react';
@@ -19,12 +19,16 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Guards against a second navigation when the effect re-runs.
+  const redirected = useRef(false);
 
   // Once a valid session exists (either restored or just created by login),
   // send the user back to the page they originally requested — never to a
   // second login screen. This is the end of the redirect loop.
   useEffect(() => {
     if (loading || !user) return;
+    if (redirected.current) return;
+    redirected.current = true;
     router.replace(resolveLoginRedirect());
   }, [loading, user, router]);
 

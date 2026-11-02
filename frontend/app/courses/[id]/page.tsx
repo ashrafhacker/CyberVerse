@@ -131,7 +131,7 @@ export default function CourseDetailPage() {
 
   const enroll = async () => {
     if (!id) return;
-    if (!user) { window.location.href = `/login?redirect=/courses/${id}`; return; }
+    if (!user) { window.location.href = `/login?redirect=${encodeURIComponent(`/courses/${id}`)}`; return; }
     setEnrolling(true);
     try {
       if (data?.is_premium && (user?.role === 'guest' || user?.role === 'student')) {
@@ -157,7 +157,7 @@ export default function CourseDetailPage() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Enrollment or checkout failed';
       if (msg.includes('Authentication failed') || (err as { status?: number })?.status === 401) {
-        window.location.href = `/login?redirect=/courses/${id}`;
+        window.location.href = `/login?redirect=${encodeURIComponent(`/courses/${id}`)}`;
         return;
       }
       setError(msg);

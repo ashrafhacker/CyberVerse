@@ -24,6 +24,7 @@ defensive programming, and observability hooks.
 from __future__ import annotations
 
 import asyncio
+import secrets
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -43,6 +44,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.api.v1.api import api_router
 from app.core.config import settings
+from app.core.cookies import CSRF_COOKIE, origin_allowed, origin_from_referer
 from app.core.database import close_db, init_db
 from app.core.exceptions import CyberVerseError
 
@@ -105,6 +107,72 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
             response.headers.setdefault("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:;")
         return response
+
+
+class CSRFProtectionMiddleware(BaseHTTPMiddleware):
+    """Origin allow-list + double-submit CSRF checks for cookie-authenticated writes.
+
+    Applied to state-changing methods only (POST/PUT/PATCH/DELETE), in layers:
+
+    1. ``Origin`` (or ``Referer`` as fallback) must be an allowed origin
+       whenever present. Browsers always send at least one on cross-origin
+       writes, so a forged cross-site request is rejected outright — this also
+       covers deployments using ``SameSite=None``.
+    2. Browser-like requests (Origin/Referer present) that authenticate via
+       cookie — i.e. no ``Authorization`` header — must echo the readable
+       ``cv_csrf`` cookie in the ``X-CSRF-Token`` header. Pre-auth bootstrap
+       endpoints (login/register/oauth/reset) are exempt from this layer
+       because they carry no ambient credentials yet; layer 1 still applies.
+    3. Non-browser clients (no Origin/Referer: curl, health checks, the test
+       suite) are exempt from both layers — they cannot be driven by a
+       third-party site, and API clients keep using ``Authorization: Bearer``.
+
+    Rejections are logged without any token material.
+    """
+
+    UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+    def __init__(self, app: ASGIApp, exempt_paths: set[str] | None = None) -> None:
+        super().__init__(app)
+        self.exempt_paths = exempt_paths or set()
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        if request.method not in self.UNSAFE_METHODS:
+            return await call_next(request)
+
+        origin = request.headers.get("origin")
+        referer = request.headers.get("referer")
+        effective_origin = origin or (origin_from_referer(referer) if referer else None)
+
+        if effective_origin is not None and not origin_allowed(effective_origin):
+            logger.warning(
+                "csrf.origin_rejected",
+                path=request.url.path,
+                origin=effective_origin,
+            )
+            return JSONResponse(
+                status_code=status.HTTP_403_FORBIDDEN,
+                content={"detail": "CSRF check failed: origin not allowed"},
+            )
+
+        browser_request = origin is not None or referer is not None
+        if browser_request and not request.headers.get("authorization"):
+            path = request.url.path.rstrip("/")
+            if path not in self.exempt_paths:
+                cookie_token = request.cookies.get(CSRF_COOKIE)
+                header_token = request.headers.get("x-csrf-token")
+                if (
+                    not cookie_token
+                    or not header_token
+                    or not secrets.compare_digest(cookie_token, header_token)
+                ):
+                    logger.warning("csrf.token_rejected", path=request.url.path)
+                    return JSONResponse(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        content={"detail": "CSRF token missing or invalid"},
+                    )
+
+        return await call_next(request)
 
 
 class SlashNormalisationMiddleware:
@@ -274,6 +342,24 @@ def create_app() -> FastAPI:
     application.add_middleware(SecurityHeadersMiddleware)
     application.add_middleware(RequestIdMiddleware)
     application.add_middleware(GZipMiddleware, minimum_size=500)
+    # Inside CORS so rejected responses still carry Access-Control-* headers
+    # the browser needs to surface the 403; outside the logging layer so the
+    # middleware can log its own structured (token-free) rejections.
+    application.add_middleware(
+        CSRFProtectionMiddleware,
+        exempt_paths={
+            f"{settings.API_V1_PREFIX}/auth/{name}"
+            for name in (
+                "login",
+                "register",
+                "google",
+                "forgot-password",
+                "reset-password",
+                "verify-email",
+                "resend-verification",
+            )
+        },
+    )
     application.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,

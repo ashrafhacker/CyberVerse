@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { User as UserIcon, BadgeCheck } from 'lucide-react';
 import Navbar from '@/components/Navbar';
-import { TerminalCard, StatCard, XPBar, LoadingScreen } from '@/components/TerminalCard';
+import { TerminalCard, StatCard, XPBar, LoadingScreen, AuthRequired } from '@/components/TerminalCard';
 import { useRequireAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
 import type { Profile } from '@/lib/types';
@@ -21,7 +21,8 @@ export default function ProfilePage() {
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load profile'));
   }, [user]);
 
-  if (loading || !user) return <LoadingScreen />;
+  if (loading) return <LoadingScreen />;
+  if (!user) return <AuthRequired />;
 
   return (
     <>

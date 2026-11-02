@@ -70,7 +70,7 @@ class SubscriptionPlan(Base):
     )
 
     price_amount: Mapped[Numeric] = mapped_column(Numeric(10, 2), nullable=False)
-    price_currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
+    price_currency: Mapped[str] = mapped_column(String(3), default="INR", nullable=False)
     billing_interval: Mapped[str] = mapped_column(String(20), default="month", nullable=False)
     billing_interval_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     trial_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -124,9 +124,6 @@ class Subscription(Base):
         default=SubscriptionStatus.PENDING,
         nullable=False,
     )
-
-    razorpay_subscription_id: Mapped[str | None] = mapped_column(String(100), unique=True, nullable=True)
-    razorpay_customer_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     current_period_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     current_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -185,9 +182,9 @@ class Payment(Base):
     )
 
     amount: Mapped[Numeric] = mapped_column(Numeric(10, 2), nullable=False)
-    currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
-    payment_method: Mapped[str] = mapped_column(String(50), default="card", nullable=False)
-    provider: Mapped[str] = mapped_column(String(50), default="razorpay", nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), default="INR", nullable=False)
+    payment_method: Mapped[str] = mapped_column(String(50), default="upi", nullable=False)
+    provider: Mapped[str] = mapped_column(String(50), default="youpi", nullable=False)
 
     description: Mapped[str | None] = mapped_column(String(300), nullable=True)
     failure_reason: Mapped[str | None] = mapped_column(String(300), nullable=True)

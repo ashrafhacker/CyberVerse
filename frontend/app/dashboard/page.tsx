@@ -5,12 +5,12 @@ import Link from 'next/link';
 import { Zap, Flame, Target, BookOpen } from 'lucide-react';
 import { useRequireAuth } from '@/lib/auth';
 import Navbar from '@/components/Navbar';
-import { TerminalCard, StatCard, XPBar, LoadingScreen } from '@/components/TerminalCard';
+import { TerminalCard, StatCard, XPBar, LoadingScreen, AuthRequired, AuthUnavailable } from '@/components/TerminalCard';
 import { api } from '@/lib/api';
 import type { Course, DailyChallenge, PlayerProgress, Profile } from '@/lib/types';
 
 export default function DashboardPage() {
-  const { user, loading } = useRequireAuth();
+  const { user, loading, status, error: authError, refreshUser } = useRequireAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [progress, setProgress] = useState<PlayerProgress | null>(null);
   const [daily, setDaily] = useState<DailyChallenge[]>([]);
@@ -34,7 +34,15 @@ export default function DashboardPage() {
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load dashboard'));
   }, [user]);
 
-  if (loading || !user) return <LoadingScreen />;
+  // The session is still being verified.
+  if (loading) return <LoadingScreen />;
+  // The session could not be checked — offer a retry instead of signing out.
+  if (status === 'error') {
+    return <AuthUnavailable message={authError} onRetry={() => { void refreshUser(); }} />;
+  }
+  // No session. The route guard redirects to /login; this is the fallback so a
+  // signed-out visitor never sees an endless connection screen.
+  if (!user) return <AuthRequired />;
   if (error) {
     return (
       <>

@@ -217,12 +217,45 @@ class Settings(BaseSettings):
         default_factory=lambda: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     )
     CORS_ALLOW_HEADERS: list[str] = Field(
-        default_factory=lambda: ["Authorization", "Content-Type", "X-Request-ID", "X-CSRF-Token"]
+        default_factory=lambda: [
+            "Authorization",
+            "Content-Type",
+            "X-Request-ID",
+            "X-CSRF-Token",
+            # Browser-sent request headers used by the CSRF middleware and
+            # preflighted cookie-authenticated calls from another origin.
+            "Origin",
+            "Referer",
+            "Sec-Fetch-Site",
+            "Sec-Fetch-Mode",
+            "Sec-Fetch-Dest",
+        ]
     )
     CORS_EXPOSE_HEADERS: list[str] = Field(
         default_factory=lambda: ["X-Request-ID", "X-Response-Time-ms"]
     )
     TRUSTED_PROXIES: list[str] = Field(default_factory=list)
+
+    # -------------------------------------------------------------------
+    # Session cookies (HttpOnly JWT transport)
+    # -------------------------------------------------------------------
+    # SameSite=Lax is correct for same-site deployments (frontend and API
+    # sharing a registrable domain, ports ignored). Cross-site deployments
+    # must set COOKIE_SAMESITE=none (which forces COOKIE_SECURE).
+    COOKIE_SAMESITE: str = Field(default="lax", pattern="^(lax|strict|none)$")
+    # None -> resolved from ENVIRONMENT: Secure in production, plain in dev/test.
+    COOKIE_SECURE: bool | None = Field(
+        default=None,
+        description="Force the Secure flag; when unset, Secure is enabled only in production",
+    )
+    COOKIE_DOMAIN: str | None = Field(
+        default=None,
+        description="Optional parent domain for auth cookies (e.g. .cyberverse.io)",
+    )
+    # How long a rotated-out refresh token stays usable so concurrent tabs
+    # refreshing at the same moment do not log the user out. Applies only to
+    # rotations made by the refresh endpoint — explicit logout has no grace.
+    REFRESH_REUSE_GRACE_SECONDS: int = Field(default=30, ge=0, le=300)
 
     # Security headers
     HSTS_MAX_AGE: int = Field(default=31536000)
@@ -282,12 +315,38 @@ class Settings(BaseSettings):
     THUMBNAIL_HEIGHT: int = Field(default=360)
 
     # -------------------------------------------------------------------
-    # Payments (Razorpay)
+    # Payments (YouPI PG — self-hosted UPI gateway)
     # -------------------------------------------------------------------
-    RAZORPAY_KEY_ID: str | None = None
-    RAZORPAY_KEY_SECRET: SecretStr | None = None
-    RAZORPAY_WEBHOOK_SECRET: SecretStr | None = None
-    RAZORPAY_CURRENCY: str = Field(default="INR")
+    YOUPI_API_URL: str = Field(
+        default="http://localhost:6100",
+        description="Base URL of the YouPI PG payment API",
+    )
+    YOUPI_MERCHANT_ID: str = Field(
+        default="00000000-0000-0000-0000-000000000001",
+        description="YouPI merchant UUID (defaults to the seeded demo merchant)",
+    )
+    YOUPI_UPI_ID: str = Field(
+        default="",
+        description="Merchant UPI VPA configured on the YouPI receiving account",
+    )
+    YOUPI_WEBHOOK_SECRET: SecretStr | None = Field(
+        default=None,
+        description="YouPI merchant webhook secret; also used as X-Merchant-Key",
+    )
+    YOUPI_ADMIN_TOKEN: SecretStr | None = Field(
+        default=None,
+        description="YouPI ADMIN_API_TOKEN, used only by scripts/configure_youpi.py",
+    )
+    YOUPI_CURRENCY: str = Field(default="INR", min_length=3, max_length=3)
+    YOUPI_TIMEOUT_SECONDS: int = Field(default=15, ge=1, le=120)
+    YOUPI_RETURN_URL: str | None = Field(
+        default=None,
+        description="Customer redirect after checkout; defaults to FRONTEND_URL/dashboard",
+    )
+    YOUPI_WEBHOOK_URL: str = Field(
+        default="http://localhost:8000/api/v1/premium/webhook/youpi",
+        description="Public URL YouPI should deliver webhooks to",
+    )
     BILLING_TRIAL_DAYS: int = Field(default=7, ge=0, le=30)
 
     # -------------------------------------------------------------------
@@ -451,6 +510,14 @@ class Settings(BaseSettings):
             # Override to in-memory / dummy services for fast tests
             object.__setattr__(self, "EMAIL_BACKEND", "dummy")
             object.__setattr__(self, "RATE_LIMIT_ENABLED", False)
+        # Browsers reject SameSite=None cookies that are not Secure.
+        effective_secure = (
+            self.COOKIE_SECURE if self.COOKIE_SECURE is not None else self.is_production
+        )
+        if self.COOKIE_SAMESITE == "none" and not effective_secure:
+            raise ValueError(
+                "COOKIE_SAMESITE=none requires COOKIE_SECURE=true (browsers reject insecure SameSite=None cookies)"
+            )
         return self
 
     def model_dump_masked(self) -> dict[str, Any]:

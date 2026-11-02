@@ -84,6 +84,9 @@ celerybeat.pid
 .vercel
 terraform.tfstate*
 
+# Promo video renders and generated marketing assets (large binaries)
+promo/
+
 # Course assets — large binary files served locally, not committed to git
 # Store these on the server filesystem or object storage (S3/Supabase)
 assets/courses/**/*.mp4

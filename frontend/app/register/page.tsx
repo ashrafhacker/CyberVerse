@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Shield, AlertTriangle } from 'lucide-react';
@@ -18,11 +18,15 @@ export default function RegisterPage() {
   const [form, setForm] = useState({ fullName: '', username: '', email: '', password: '' });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Guards against a second navigation when the effect re-runs.
+  const redirected = useRef(false);
 
   // If a session already exists, do not show the registration form — return the
   // user to their intended destination (or the dashboard).
   useEffect(() => {
     if (loading || !user) return;
+    if (redirected.current) return;
+    redirected.current = true;
     router.replace(resolveLoginRedirect());
   }, [loading, user, router]);
 

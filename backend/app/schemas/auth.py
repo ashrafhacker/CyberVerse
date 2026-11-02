@@ -39,6 +39,9 @@ class RegisterRequest(BaseModel):
     accept_terms: bool = True
     accept_privacy: bool = True
     referral_code: str | None = None
+    # Browser clients authenticate via HttpOnly cookies and never need the raw
+    # JWTs; non-browser clients opt in explicitly to receive them in the body.
+    include_tokens: bool = False
 
     def passwords_match(self) -> bool:
         return self.password == self.confirm_password
@@ -50,18 +53,24 @@ class LoginRequest(BaseModel):
     remember_me: bool = False
     totp_code: str | None = None
     backup_code: str | None = None
+    include_tokens: bool = False
 
 
 class TokenResponse(BaseModel):
-    access_token: str
-    refresh_token: str
+    # Both tokens are None unless the client sent include_tokens=true:
+    # the session travels in HttpOnly Set-Cookie headers instead.
+    access_token: str | None = None
+    refresh_token: str | None = None
     token_type: str = "bearer"
     expires_in: int
     user: "UserResponse"
 
 
 class RefreshTokenRequest(BaseModel):
-    refresh_token: str
+    # Optional: cookie-based refresh sends no body token. A value here is the
+    # legacy/migration path for clients that still hold a refresh JWT.
+    refresh_token: str | None = None
+    include_tokens: bool = False
 
 
 class EmailVerificationRequest(BaseModel):
@@ -112,6 +121,7 @@ class Disable2FARequest(BaseModel):
 
 class GoogleLoginRequest(BaseModel):
     credential: str
+    include_tokens: bool = False
 
 class OAuthLoginRequest(BaseModel):
     provider: AuthProvider

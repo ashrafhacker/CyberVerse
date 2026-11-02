@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { API_URL, api, getTokens } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { CURRICULUM } from '@/lib/curriculum';
 
 // ─── Completion verification constants (mirror backend) ──────────────────────
@@ -285,6 +286,10 @@ function VideoPlayer({
       <video
         ref={videoRef}
         src={src}
+        // The session cookie must travel with the media request. A <video>
+        // element cannot set an Authorization header, so the cookie is the
+        // only credential — cross-origin deployments need it sent explicitly.
+        crossOrigin="use-credentials"
         className="w-full aspect-video"
         preload="auto"
         playsInline
@@ -458,8 +463,8 @@ function lessonTypeOf(l: { lesson_type?: string; resources?: Array<{ path?: stri
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function LessonPlayerPage() {
   const { id, lessonId } = useParams<{ id: string; lessonId: string }>();
+  const { user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [token, setToken] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
   const [markingComplete, setMarkingComplete] = useState(false);
   const [completeError, setCompleteError] = useState<string | null>(null);
@@ -471,9 +476,12 @@ export default function LessonPlayerPage() {
   const [watchPct, setWatchPct] = useState(0);
   const watchPctRef = useRef(0);
 
-  useEffect(() => {
-    setToken(getTokens().access);
-  }, []);
+  // The browser session lives in an HttpOnly cookie, so the API authenticates
+  // the request by itself. A bearer token is only present for legacy clients
+  // and is then passed as a query parameter (the media endpoint accepts it for
+  // <video> sources, which cannot set an Authorization header).
+  const isAuthenticated = !!user;
+  const bearerToken = getTokens().access;
 
   useEffect(() => {
     setCompleted(false);
@@ -519,7 +527,7 @@ export default function LessonPlayerPage() {
 
   // Saved progress: completion state, resume position, watch baseline.
   useEffect(() => {
-    if (!token || !UUID_RE.test(lessonId)) return;
+    if (!isAuthenticated || !UUID_RE.test(lessonId)) return;
     let cancelled = false;
     (async () => {
       try {
@@ -540,7 +548,7 @@ export default function LessonPlayerPage() {
     return () => {
       cancelled = true;
     };
-  }, [lessonId, token]);
+  }, [lessonId, isAuthenticated]);
 
   // Resolve the lesson list from whichever source is available.
   const lessons: ResolvedLesson[] = isStatic && staticCourse
@@ -616,7 +624,7 @@ export default function LessonPlayerPage() {
       setMarkingComplete(false);
       return;
     }
-    if (!token) {
+    if (!isAuthenticated) {
       setCompleteError('Log in to save your progress.');
       setMarkingComplete(false);
       return;
@@ -646,7 +654,7 @@ export default function LessonPlayerPage() {
   // Build authenticated streaming URL (or pass through gdrive link)
   const assetUrl = lesson.asset.startsWith('gdrive://')
     ? lesson.asset
-    : `${API_URL}/media/stream?path=${encodeURIComponent(lesson.asset)}${token ? `&token=${token}` : ''}`;
+    : `${API_URL}/media/stream?path=${encodeURIComponent(lesson.asset)}${bearerToken ? `&token=${bearerToken}` : ''}`;
 
   return (
     <div className="flex flex-col min-h-screen bg-cyber-bg">
@@ -676,7 +684,7 @@ export default function LessonPlayerPage() {
                   src={assetUrl}
                   title={lesson.title}
                   lessonId={lesson.id}
-                  canTrack={!!token}
+                  canTrack={isAuthenticated}
                   initialResume={progressEntry?.last_position?.seconds ?? 0}
                   baselineWatched={progressEntry?.last_position?.watched_seconds ?? null}
                   baselinePct={progressEntry?.progress_percentage ?? 0}

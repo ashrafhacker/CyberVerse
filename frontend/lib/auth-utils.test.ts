@@ -4,8 +4,59 @@ import {
   authErrorMessage,
   consumeRedirectTarget,
   resolveLoginRedirect,
+  sanitizeRedirect,
   saveRedirectTarget,
 } from './auth-utils';
+
+describe('sanitizeRedirect', () => {
+  it('accepts a plain in-app path', () => {
+    expect(sanitizeRedirect('/courses/course-1')).toBe('/courses/course-1');
+  });
+
+  it('preserves a query string', () => {
+    expect(sanitizeRedirect('/courses/course-1?tab=modules')).toBe('/courses/course-1?tab=modules');
+  });
+
+  it('rejects external and protocol-relative targets', () => {
+    expect(sanitizeRedirect('//evil.com/x')).toBeNull();
+    expect(sanitizeRedirect('https://evil.com/x')).toBeNull();
+    expect(sanitizeRedirect('http://evil.com/x')).toBeNull();
+    expect(sanitizeRedirect('javascript:alert(1)')).toBeNull();
+    expect(sanitizeRedirect('data:text/html,<script>')).toBeNull();
+  });
+
+  it('rejects backslash variants that browsers normalise to //', () => {
+    expect(sanitizeRedirect('/\\evil.com/x')).toBeNull();
+  });
+
+  it('rejects a scheme smuggled behind a leading slash', () => {
+    expect(sanitizeRedirect('/javascript:alert(1)')).toBeNull();
+  });
+
+  it('rejects control characters', () => {
+    expect(sanitizeRedirect('/courses/\n/evil')).toBeNull();
+    expect(sanitizeRedirect('/courses/\u0000')).toBeNull();
+  });
+
+  it('rejects the auth pages and the API namespace', () => {
+    expect(sanitizeRedirect('/login')).toBeNull();
+    expect(sanitizeRedirect('/login?redirect=/x')).toBeNull();
+    expect(sanitizeRedirect('/register')).toBeNull();
+    expect(sanitizeRedirect('/api/v1/auth/google')).toBeNull();
+    expect(sanitizeRedirect('/api')).toBeNull();
+  });
+
+  it('strips a nested redirect parameter so a redirect cycle cannot be built', () => {
+    expect(sanitizeRedirect('/dashboard?redirect=/login')).toBe('/dashboard');
+    expect(sanitizeRedirect('/dashboard?tab=1&redirect=%2Flogin')).toBe('/dashboard?tab=1');
+  });
+
+  it('rejects empty and non-string input', () => {
+    expect(sanitizeRedirect('')).toBeNull();
+    expect(sanitizeRedirect(null)).toBeNull();
+    expect(sanitizeRedirect(undefined)).toBeNull();
+  });
+});
 
 describe('redirect target storage', () => {
   beforeEach(() => {
@@ -77,6 +128,12 @@ describe('resolveLoginRedirect', () => {
     saveRedirectTarget('/profile');
     window.history.pushState({}, '', '/login?redirect=//evil.com');
     expect(resolveLoginRedirect()).toBe('/profile');
+  });
+
+  it('never falls back to an unsafe destination', () => {
+    // A misconfigured fallback must not become an open redirect.
+    expect(resolveLoginRedirect('//evil.com/x')).toBe('/dashboard');
+    expect(resolveLoginRedirect('https://evil.com/x')).toBe('/dashboard');
   });
 });
 

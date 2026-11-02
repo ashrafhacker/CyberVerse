@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Users, ShieldAlert, Activity, Flag, Ban, CheckCircle2 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
-import { TerminalCard, StatCard, LoadingScreen } from '@/components/TerminalCard';
+import { TerminalCard, StatCard, LoadingScreen, AuthRequired } from '@/components/TerminalCard';
 import { useRequireAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
 import type { UserRole } from '@/lib/types';
@@ -71,7 +71,8 @@ export default function AdminPage() {
     }
   };
 
-  if (loading || !user) return <LoadingScreen />;
+  if (loading) return <LoadingScreen />;
+  if (!user) return <AuthRequired />;
 
   if (error) {
     return (

@@ -6,7 +6,7 @@ import { Terminal, Shield, AlertTriangle, Play, Square, Save, Activity, Command,
 import { api } from '@/lib/api';
 import { useRequireAuth } from '@/lib/auth';
 import Navbar from '@/components/Navbar';
-import { LoadingScreen, TerminalCard } from '@/components/TerminalCard';
+import { LoadingScreen, TerminalCard, AuthRequired } from '@/components/TerminalCard';
 import type { APIResponse, LabSession, LabWorld, LabAnalysis } from '@/lib/types';
 
 export default function RealTimeLabPage() {
@@ -126,7 +126,23 @@ export default function RealTimeLabPage() {
     }
   };
 
-  if (loading || !user || !session) return <LoadingScreen />;
+  if (loading) return <LoadingScreen />;
+  if (!user) return <AuthRequired />;
+  // A failed session load must not leave the visitor on an endless spinner.
+  if (!session) {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <div className="terminal-card max-w-md p-8 text-center">
+          <p className="font-mono text-sm text-cyber-danger">&gt; session unavailable</p>
+          <h1 className="mt-3 text-lg font-semibold">Could not open this lab session</h1>
+          <p className="mt-2 text-sm text-cyber-muted">{error || 'The session could not be loaded.'}</p>
+          <button type="button" onClick={() => router.push('/labs')} className="terminal-button mt-6 px-6 py-2">
+            Back to labs
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen flex-col bg-cyber-dark text-cyber-text">

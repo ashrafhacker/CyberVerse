@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { GraduationCap, FileText } from 'lucide-react';
 import Navbar from '@/components/Navbar';
-import { TerminalCard, LoadingScreen } from '@/components/TerminalCard';
+import { TerminalCard, LoadingScreen, AuthRequired } from '@/components/TerminalCard';
 import { useRequireAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
 import type { UserRole } from '@/lib/types';
@@ -36,7 +36,8 @@ export default function InstructorPage() {
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load instructor stats'));
   }, [user, router]);
 
-  if (loading || !user) return <LoadingScreen />;
+  if (loading) return <LoadingScreen />;
+  if (!user) return <AuthRequired />;
 
   return (
     <>

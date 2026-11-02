@@ -14,8 +14,12 @@ async def test_register_creates_account(client):
     )
     assert response.status_code == 201
     data = response.json()["data"]
-    assert data["access_token"]
-    assert data["refresh_token"]
+    # Sessions travel in HttpOnly cookies — tokens are not in the body.
+    assert data["access_token"] is None
+    assert data["refresh_token"] is None
+    set_cookies = response.headers.get_list("set-cookie")
+    assert any(c.startswith("cv_access=") and "HttpOnly" in c for c in set_cookies)
+    assert any(c.startswith("cv_refresh=") and "HttpOnly" in c for c in set_cookies)
     assert data["user"]["email"] == "alice@test.io"
     assert data["user"]["role"] == "student"
     assert data["user"]["is_verified"] is False
@@ -53,7 +57,9 @@ async def test_login_success(client):
         json={"email": "carol@test.io", "password": "StrongPass123!"},
     )
     assert response.status_code == 200
-    assert response.json()["data"]["access_token"]
+    # Tokens are delivered as cookies, not JSON fields.
+    assert response.json()["data"]["access_token"] is None
+    assert any(c.startswith("cv_access=") for c in response.headers.get_list("set-cookie"))
 
 
 async def test_login_wrong_password_rejected(client):
@@ -80,7 +86,7 @@ async def test_me_requires_auth(client):
     assert response.status_code == 401
 
 
-async def test_me_with_token(client):
+async def test_me_with_session_cookie(client):
     register = await client.post(
         "/api/v1/auth/register",
         json={
@@ -92,13 +98,35 @@ async def test_me_with_token(client):
         },
     )
     assert register.status_code == 201, register.text
+
+    # No Authorization header: the HttpOnly access cookie authenticates.
+    response = await client.get("/api/v1/auth/me")
+    assert response.status_code == 200
+    assert response.json()["data"]["email"] == "erin@test.io"
+
+
+async def test_me_with_bearer_token(client):
+    """Non-browser clients can still opt in to body tokens + Bearer auth."""
+    register = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "fred@test.io",
+            "password": "StrongPass123!",
+            "confirm_password": "StrongPass123!",
+            "full_name": "Fred Tester",
+            "username": "fred_test",
+            "include_tokens": True,
+        },
+    )
+    assert register.status_code == 201, register.text
     token = register.json()["data"]["access_token"]
+    assert token
 
     response = await client.get(
         "/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 200
-    assert response.json()["data"]["email"] == "erin@test.io"
+    assert response.json()["data"]["email"] == "fred@test.io"
 
 
 async def test_refresh_token_flow(client):
@@ -113,13 +141,12 @@ async def test_refresh_token_flow(client):
         },
     )
     assert register.status_code == 201, register.text
-    refresh_token = register.json()["data"]["refresh_token"]
 
-    response = await client.post(
-        "/api/v1/auth/refresh", json={"refresh_token": refresh_token}
-    )
+    # Cookie-based refresh: no body token needed.
+    response = await client.post("/api/v1/auth/refresh", json={})
     assert response.status_code == 200
-    assert response.json()["data"]["access_token"]
+    assert response.json()["data"]["access_token"] is None
+    assert any(c.startswith("cv_access=") for c in response.headers.get_list("set-cookie"))
 
 
 async def test_logout_revokes_session(client):
@@ -134,15 +161,22 @@ async def test_logout_revokes_session(client):
         },
     )
     assert register.status_code == 201, register.text
-    token = register.json()["data"]["access_token"]
-    refresh_token = register.json()["data"]["refresh_token"]
-    headers = {"Authorization": f"Bearer {token}"}
-
-    logout = await client.post("/api/v1/auth/logout", headers=headers)
-    assert logout.status_code == 200
-
-    # Without Redis, refresh token revocation may not work
-    refresh_after = await client.post(
-        "/api/v1/auth/refresh", json={"refresh_token": refresh_token}
+    refresh_cookie = next(
+        c.split(";", 1)[0].split("=", 1)[1]
+        for c in register.headers.get_list("set-cookie")
+        if c.startswith("cv_refresh=")
     )
-    assert refresh_after.status_code in (200, 401)
+
+    logout = await client.post("/api/v1/auth/logout")
+    assert logout.status_code == 200
+    # Cookies are expired by the logout response.
+    assert any(
+        c.startswith("cv_access=") and ("Max-Age=0" in c or c.startswith("cv_access=;"))
+        for c in logout.headers.get_list("set-cookie")
+    )
+
+    # The revoked refresh token can no longer mint a session.
+    refresh_after = await client.post(
+        "/api/v1/auth/refresh", json={"refresh_token": refresh_cookie}
+    )
+    assert refresh_after.status_code == 401

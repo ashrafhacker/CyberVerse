@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Loader2, Settings2, X } from 'lucide-react';
 import { useRequireAuth } from '@/lib/auth';
-import { LoadingScreen } from '@/components/TerminalCard';
+import { LoadingScreen, AuthRequired } from '@/components/TerminalCard';
 import { useCommandCenter } from '@/lib/command-center';
 import CommandSidebar from '@/components/command-center/CommandSidebar';
 import CommandTopbar, { MobileNavSheet, type SearchTarget } from '@/components/command-center/CommandTopbar';
@@ -73,7 +73,8 @@ export default function CommandCenterPage() {
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
-  if (loading || !user) return <LoadingScreen />;
+  if (loading) return <LoadingScreen />;
+  if (!user) return <AuthRequired />;
 
   const ribbon = snapshot.ribbon;
 

@@ -12,6 +12,8 @@ async def _register(client, email, username, name="Test Agent"):
             "confirm_password": "StrongPass123!",
             "full_name": name,
             "username": username,
+            # Non-browser client: opt in to body tokens for Bearer auth.
+            "include_tokens": True,
         },
     )
     assert response.status_code == 201, response.text

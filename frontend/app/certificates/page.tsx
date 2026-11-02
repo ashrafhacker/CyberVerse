@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Award, BadgeCheck, Calendar, Copy, Search, ShieldCheck } from 'lucide-react';
 import Navbar from '@/components/Navbar';
-import { LoadingScreen, TerminalCard } from '@/components/TerminalCard';
+import { LoadingScreen, TerminalCard, AuthRequired } from '@/components/TerminalCard';
 import { api } from '@/lib/api';
 import { useRequireAuth } from '@/lib/auth';
 import type { APIResponse } from '@/lib/types';
@@ -62,7 +62,8 @@ export default function CertificatesPage() {
     }
   };
 
-  if (loading || !user) return <LoadingScreen />;
+  if (loading) return <LoadingScreen />;
+  if (!user) return <AuthRequired />;
 
   return (
     <>

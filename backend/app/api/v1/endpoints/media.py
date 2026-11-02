@@ -21,6 +21,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db, get_optional_user
 from app.core.config import get_settings
 from app.core.r2_storage import get_r2_bucket, get_r2_client, is_missing_object_error
+from app.models.course import Course
+from app.models.progress import Enrollment
 from app.models.user import User
 
 router = APIRouter()
@@ -33,6 +35,9 @@ _ASSET_COURSE_SLUGS = {
     "hands-on-hacking/burp-suite": "burp-suite-live-practical",
     "hands-on-hacking/http-debugger": "http-debugger-pro",
 }
+# Roles exempt from enrollment for *mapped* course assets only. Unmapped assets
+# are denied for every role; there is no public preview policy.
+_PRIVILEGED_ROLES = {"administrator", "developer", "super_admin", "instructor"}
 
 
 def _normalize_asset_path(relative_path: str) -> str:
@@ -56,18 +61,20 @@ def _local_path(key: str) -> Path | None:
     return candidate if candidate.is_file() else None
 
 
-async def _authorize_course_asset(key: str, current_user: User | None, db: AsyncSession) -> None:
-    bypass_roles = {"administrator", "developer", "super_admin", "instructor"}
-    if current_user is not None and current_user.role in bypass_roles:
-        return
+def _course_slug_for_asset(key: str) -> str | None:
+    """Map an asset key to its course slug, or None when the asset is unmapped."""
     parts = key.split("/")
     asset_root = "/".join(parts[:2])
-    course_slug = _ASSET_COURSE_SLUGS.get(asset_root) or _ASSET_COURSE_SLUGS.get(parts[0])
-    # Assets without a configured course mapping: deny by default (no explicit preview policy)
+    return _ASSET_COURSE_SLUGS.get(asset_root) or _ASSET_COURSE_SLUGS.get(parts[0])
+
+
+async def _authorize_course_asset(key: str, current_user: User | None, db: AsyncSession) -> None:
+    # Order matters: unmapped assets are denied for everyone (including
+    # privileged roles), and a mapped asset must resolve to a real course
+    # before any privileged-role bypass is considered.
+    course_slug = _course_slug_for_asset(key)
     if not course_slug:
         raise HTTPException(status_code=403, detail="Access denied")
-    from app.models.course import Course
-    from app.models.progress import Enrollment
 
     course_result = await db.execute(select(Course.id).where(Course.slug == course_slug))
     course_id = course_result.scalar_one_or_none()
@@ -77,6 +84,8 @@ async def _authorize_course_asset(key: str, current_user: User | None, db: Async
         raise HTTPException(status_code=404, detail="Course not found")
     if current_user is None:
         raise HTTPException(status_code=401, detail="Authentication required for this course")
+    if current_user.role in _PRIVILEGED_ROLES:
+        return
     enrolled = await db.execute(
         select(Enrollment.id).where(
             Enrollment.user_id == current_user.id,
@@ -85,6 +94,36 @@ async def _authorize_course_asset(key: str, current_user: User | None, db: Async
     )
     if enrolled.scalar_one_or_none() is None:
         raise HTTPException(status_code=403, detail="Enroll in this course to access its materials")
+
+
+async def _visible_asset_keys(keys: list[str], current_user: User, db: AsyncSession) -> set[str]:
+    """Asset keys the user is allowed to see in the manifest.
+
+    Same policy as streaming: unmapped assets and assets whose course record
+    is missing are never visible; privileged roles see mapped assets; everyone
+    else only sees assets of courses they are enrolled in.
+    """
+    slugs = {slug for slug in (_course_slug_for_asset(key) for key in keys) if slug}
+    if not slugs:
+        return set()
+    course_rows = await db.execute(
+        select(Course.slug, Course.id).where(Course.slug.in_(list(slugs)))
+    )
+    courses = dict(course_rows.all())
+    if not courses:
+        return set()
+    if current_user.role in _PRIVILEGED_ROLES:
+        allowed_slugs = set(courses)
+    else:
+        enrollment_rows = await db.execute(
+            select(Enrollment.course_id).where(
+                Enrollment.user_id == current_user.id,
+                Enrollment.course_id.in_(courses.values()),
+            )
+        )
+        enrolled_ids = set(enrollment_rows.scalars())
+        allowed_slugs = {slug for slug, cid in courses.items() if cid in enrolled_ids}
+    return {key for key in keys if _course_slug_for_asset(key) in allowed_slugs}
 
 
 def _presign_get(key: str) -> str:
@@ -158,8 +197,10 @@ async def stream_asset(
 async def list_assets(
     course: str | None = Query(None, description="Optional folder prefix to filter"),
     current_user: User | None = Depends(get_optional_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    if current_user is None:
+    user = current_user
+    if user is None:
         raise HTTPException(status_code=401, detail="Authentication required")
     raw_prefix = course or ""
     if (
@@ -220,5 +261,7 @@ async def list_assets(
                 status_code=502, detail="Private media storage is temporarily unavailable"
             ) from exc
 
-    ordered = [assets[k] for k in sorted(assets)]
+    # Same access-control policy as /stream, applied to local and R2 listings.
+    visible = await _visible_asset_keys(list(assets), user, db)
+    ordered = [assets[k] for k in sorted(assets) if k in visible]
     return {"total": len(ordered), "assets": ordered}

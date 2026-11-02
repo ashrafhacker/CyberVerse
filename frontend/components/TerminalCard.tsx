@@ -77,3 +77,51 @@ export function LoadingScreen() {
     </div>
   );
 }
+
+/**
+ * Shown on a protected page when there is no session.
+ *
+ * The route guard normally redirects to /login; this is the fallback state so
+ * a signed-out visitor never stares at an endless "establishing secure
+ * connection..." screen.
+ */
+export function AuthRequired() {
+  return (
+    <div className="flex min-h-screen items-center justify-center px-4">
+      <div className="terminal-card max-w-md p-8 text-center">
+        <p className="font-mono text-sm text-cyber-primary">&gt; session required</p>
+        <h1 className="mt-3 text-lg font-semibold">You need to sign in</h1>
+        <p className="mt-2 text-sm text-cyber-muted">
+          This page is part of your CyberVerse profile. Sign in to continue.
+        </p>
+        <a href="/login" className="terminal-button mt-6 inline-block px-6 py-2">
+          Sign in
+        </a>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Shown on a protected page when the session could not be checked (network or
+ * server fault). Unlike a missing session, this must not sign the user out —
+ * it offers a retry instead.
+ */
+export function AuthUnavailable({ message, onRetry }: { message?: string | null; onRetry?: () => void }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center px-4">
+      <div className="terminal-card max-w-md p-8 text-center">
+        <p className="font-mono text-sm text-cyber-warning">&gt; connection unstable</p>
+        <h1 className="mt-3 text-lg font-semibold">Could not verify your session</h1>
+        <p className="mt-2 text-sm text-cyber-muted">
+          {message || 'The CyberVerse server did not respond. Your session may still be active.'}
+        </p>
+        {onRetry && (
+          <button type="button" onClick={onRetry} className="terminal-button mt-6 px-6 py-2">
+            Try again
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}

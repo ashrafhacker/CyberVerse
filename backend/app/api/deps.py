@@ -13,6 +13,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cookies import ACCESS_COOKIE
 from app.core.database import get_db
 from app.core.security import decode_token
 from app.models.user import User, UserRole, UserStatus
@@ -20,15 +21,31 @@ from app.models.user import User, UserRole, UserStatus
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
+def _resolve_token(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None,
+    token: str | None,
+) -> str | None:
+    """Token precedence: Authorization header, query param (WebSocket),
+    then the HttpOnly access cookie used by the browser client."""
+    if credentials:
+        return credentials.credentials
+    if token:
+        return token
+    return request.cookies.get(ACCESS_COOKIE)
+
+
 async def get_current_user(
+    request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
     token: str | None = None,
     db: AsyncSession = Depends(get_db),  # noqa: B008
 ) -> User:
     """
-    Get the authenticated user from bearer token or query parameter.
+    Get the authenticated user from bearer token, query parameter, or cookie.
 
     Args:
+        request: Current request (for the HttpOnly access cookie fallback).
         credentials: HTTP Authorization header credentials.
         token: Optional token from query parameter (for WebSocket).
         db: Database session dependency.
@@ -41,7 +58,7 @@ async def get_current_user(
         HTTPException: 403 if account is not active.
 
     """
-    actual_token = credentials.credentials if credentials else token
+    actual_token = _resolve_token(request, credentials, token)
     if not actual_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -84,6 +101,7 @@ async def get_current_user(
 
 
 async def get_optional_user(
+    request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
     token: str | None = None,
     db: AsyncSession = Depends(get_db),  # noqa: B008
@@ -96,6 +114,7 @@ async def get_optional_user(
     authenticated and anonymous access.
 
     Args:
+        request: Current request (for the HttpOnly access cookie fallback).
         credentials: HTTP Authorization header credentials.
         token: Optional token from query parameter.
         db: Database session dependency.
@@ -104,7 +123,7 @@ async def get_optional_user(
         The authenticated User instance or None.
 
     """
-    actual_token = credentials.credentials if credentials else token
+    actual_token = _resolve_token(request, credentials, token)
     if not actual_token:
         return None
     try:

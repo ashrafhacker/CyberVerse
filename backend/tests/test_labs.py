@@ -7,10 +7,13 @@ async def register_and_auth(client, email="labs@test.io", username="labs_user"):
             "confirm_password": "StrongPass123!",
             "full_name": "Labs Tester",
             "username": username,
+            # Non-browser client: opt in to body tokens for Bearer auth.
+            "include_tokens": True,
         },
     )
     assert response.status_code == 201
     token = response.json()["data"]["access_token"]
+    assert token
     return {"Authorization": f"Bearer {token}"}
 
 

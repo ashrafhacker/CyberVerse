@@ -17,7 +17,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
-import { LoadingScreen, TerminalCard } from '@/components/TerminalCard';
+import { LoadingScreen, TerminalCard, AuthRequired } from '@/components/TerminalCard';
 import { api } from '@/lib/api';
 import { useRequireAuth } from '@/lib/auth';
 import type { APIResponse, LabFacility, LabMission, LabSession, LabWorld } from '@/lib/types';
@@ -90,7 +90,8 @@ export default function LabsPage() {
     }
   }
 
-  if (loading || !user) return <LoadingScreen />;
+  if (loading) return <LoadingScreen />;
+  if (!user) return <AuthRequired />;
 
   return (
     <>
