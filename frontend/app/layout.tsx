@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { ClerkProvider } from '@clerk/nextjs';
 import { AuthProvider } from '@/lib/auth';
 import { ToastProvider } from '@/lib/toast';
-import CookieConsent from '@/components/CookieConsent';
+import CookieConsentWrapper from './CookieConsentWrapper';
 import AIMentorWidgetWrapper from './AIMentorWidgetWrapper';
 import './globals.css';
 
@@ -150,7 +150,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <AuthProvider>
             <ToastProvider>
               {children}
-              <CookieConsent />
+              <CookieConsentWrapper />
               {/* AI mentor: client-only floating chat (no SSR, no hydration
                   cost) so it loads after the page is interactive. */}
               <AIMentorWidgetWrapper />

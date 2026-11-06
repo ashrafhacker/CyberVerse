@@ -64,7 +64,6 @@ const nextConfig = {
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production',
   },
-  swcMinify: true,
   productionBrowserSourceMaps: false,
   // NOTE: cesium is intentionally NOT in transpilePackages. cesium@1.145 ships
   // native ESM ("type":"module", exports["."].import -> ./Source/Cesium.js)

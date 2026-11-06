@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import Link from 'next/link';
 import { Shield, Terminal, Globe, Lock, Trophy, Zap, ShieldAlert, Users, Cpu, Eye, Award, ArrowRight, Sparkles, Activity, BookOpen, Target } from 'lucide-react';
-import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useAuth } from '@/lib/auth';
 
 interface Feature {
@@ -31,18 +30,6 @@ interface Faq {
   a: string;
   category: 'general' | 'pricing' | 'certification' | 'legal';
 }
-
-const containerVariants: Variants = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.08, delayChildren: 0.12 } },
-};
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 16 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] } },
-};
-
-const cardHover = { y: -4, scale: 1.01, transition: { duration: 0.2 } };
 
 const FEATURES: Feature[] = [
   { id: 'missions', icon: Terminal, title: 'Hands-On Missions', description: 'Interactive sandboxes with guided exploits, forensics, and defense scenarios — zero risk to real systems.', accent: 'text-cyan-400', stats: '200+ missions' },
@@ -79,14 +66,14 @@ const STATS = [
 const FeatureCard = memo(function FeatureCard({ feature }: { feature: Feature }) {
   const Icon = feature.icon;
   return (
-    <motion.div variants={itemVariants} whileHover={cardHover} className="terminal-card group p-6 transition-all hover:border-cyber-primary/60 hover:shadow-[0_0_24px_rgba(34,211,238,0.15)]">
+    <div className="terminal-card group p-6 transition-all duration-200 hover:-translate-y-1 hover:scale-[1.01] hover:border-cyber-primary/60 hover:shadow-[0_0_24px_rgba(34,211,238,0.15)]">
       <Icon className={`mb-4 h-8 w-8 ${feature.accent}`} />
       <h3 className="mb-1.5 font-semibold tracking-tight">{feature.title}</h3>
       <p className="mb-3 text-sm leading-relaxed text-cyber-muted">{feature.description}</p>
       <span className="inline-flex items-center gap-1.5 rounded-full border border-cyber-border bg-cyber-surface px-2.5 py-1 text-xs font-medium text-cyber-muted">
         <Activity className="h-3 w-3" /> {feature.stats}
       </span>
-    </motion.div>
+    </div>
   );
 });
 
@@ -94,7 +81,7 @@ const PathCard = memo(function PathCard({ path }: { path: Path }) {
   const Icon = path.icon;
   const levelColor: Record<string, string> = { Beginner: 'bg-emerald-500/15 text-emerald-400', Intermediate: 'bg-sky-500/15 text-sky-400', Advanced: 'bg-violet-500/15 text-violet-400', Expert: 'bg-amber-500/15 text-amber-400' };
   return (
-    <motion.div variants={itemVariants} whileHover={cardHover} className={`terminal-card p-6 ${path.color} transition-colors`}>
+    <div className={`terminal-card p-6 ${path.color} transition-all duration-200 hover:-translate-y-1 hover:scale-[1.01]`}>
       <div className="mb-4 flex items-start justify-between">
         <Icon className="h-8 w-8 text-cyber-primary" />
         <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${levelColor[path.level]}`}>{path.level}</span>
@@ -105,7 +92,7 @@ const PathCard = memo(function PathCard({ path }: { path: Path }) {
         <span className="inline-flex items-center gap-1"><BookOpen className="h-3.5 w-3.5" /> {path.modules} modules</span>
         <span className="inline-flex items-center gap-1"><Zap className="h-3.5 w-3.5" /> {path.duration}</span>
       </div>
-    </motion.div>
+    </div>
   );
 });
 
@@ -158,12 +145,12 @@ export default function Home() {
             {!mounted || loading ? (
               <div className="h-9 w-32 animate-pulse rounded bg-cyber-surface" aria-hidden />
             ) : user ? (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-3">
+              <div className="animate-fade-in flex items-center gap-3">
                 <span className="hidden text-sm text-cyber-muted md:inline">Hi, {user.full_name?.split(' ')[0]}</span>
                 <Link href="/dashboard" className="terminal-button inline-flex items-center gap-2">
                   Dashboard <ArrowRight className="h-4 w-4" />
                 </Link>
-              </motion.div>
+              </div>
             ) : (
               <div className="flex items-center gap-2">
                 <Link href="/login" className="terminal-button-ghost hidden md:inline-flex">Log in</Link>
@@ -181,24 +168,24 @@ export default function Home() {
           <div className="pointer-events-none absolute -top-24 right-1/4 h-[420px] w-[420px] rounded-full bg-cyan-500/15 blur-[80px]" />
           <div className="pointer-events-none absolute -bottom-24 left-1/4 h-[420px] w-[420px] rounded-full bg-violet-500/15 blur-[80px]" />
 
-          <motion.div suppressHydrationWarning variants={containerVariants} initial="hidden" animate="visible" className="relative mx-auto max-w-5xl px-6 text-center">
-            <motion.p variants={itemVariants} className="mb-4 inline-flex items-center gap-2 rounded-full border border-cyber-primary/30 bg-cyber-primary/10 px-3 py-1 font-mono text-xs text-cyber-primary">
+          <div suppressHydrationWarning className="relative mx-auto max-w-5xl px-6 text-center animate-stagger-in">
+            <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-cyber-primary/30 bg-cyber-primary/10 px-3 py-1 font-mono text-xs text-cyber-primary">
               <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
               {'>'} {'// educational cybersecurity simulation platform — v2.1 PRO'}
-            </motion.p>
+            </p>
 
-            <motion.h1 variants={itemVariants} className="mb-6 text-5xl font-extrabold tracking-tight md:text-7xl">
+            <h1 className="mb-6 text-5xl font-extrabold tracking-tight md:text-7xl">
               Learn Cybersecurity{' '}
               <span className="glow-text bg-gradient-to-r from-cyan-400 to-violet-400 bg-clip-text text-transparent">By Doing.</span>
-            </motion.h1>
+            </h1>
 
-            <motion.p variants={itemVariants} className="mx-auto mb-8 max-w-2xl text-lg leading-relaxed text-cyber-muted">
+            <p className="mx-auto mb-8 max-w-2xl text-lg leading-relaxed text-cyber-muted">
               Attack, defend, and investigate — inside a controlled sandbox where every action is{' '}
               <span className="font-medium text-cyber-text">legal, simulated, and designed to teach</span>.
               Enterprise-grade pedagogy trusted by 50K+ learners.
-            </motion.p>
+            </p>
 
-            <motion.div suppressHydrationWarning variants={itemVariants} className="flex flex-wrap justify-center gap-4">
+            <div suppressHydrationWarning className="flex flex-wrap justify-center gap-4">
               {!mounted || loading ? (
                 <div className="h-12 w-64 animate-pulse rounded bg-cyber-surface" />
               ) : user ? (
@@ -215,26 +202,26 @@ export default function Home() {
                   </Link>
                 </>
               )}
-            </motion.div>
+            </div>
 
-            <motion.p variants={itemVariants} className="mt-6 font-mono text-xs text-cyber-muted">No credit card required • Cancel anytime • GDPR compliant</motion.p>
+            <p className="mt-6 font-mono text-xs text-cyber-muted">No credit card required • Cancel anytime • GDPR compliant</p>
 
-            <motion.div variants={itemVariants} className="mx-auto mt-10 grid max-w-3xl grid-cols-2 gap-4 md:grid-cols-4">
+            <div className="mx-auto mt-10 grid max-w-3xl grid-cols-2 gap-4 md:grid-cols-4">
               {STATS.map(s => (
                 <div key={s.label} className="rounded-xl border border-cyber-border bg-cyber-surface/60 px-4 py-3">
                   <div className="text-2xl font-bold text-cyber-primary">{s.value}</div>
                   <div className="text-xs uppercase tracking-widest text-cyber-muted">{s.label}</div>
                 </div>
               ))}
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         </section>
 
         <div className="mx-auto max-w-7xl px-6">
-          <motion.div initial={{ opacity: 0, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="flex items-center gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+          <div className="flex items-center gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300 animate-fade-in">
             <ShieldAlert className="h-5 w-5 flex-shrink-0" />
             <span><strong>Educational only:</strong> All content is for defense education — never for attacking real systems. Learn to secure, not exploit.</span>
-          </motion.div>
+          </div>
         </div>
 
         <section id="features" className="mx-auto max-w-7xl px-6 py-20">
@@ -242,11 +229,11 @@ export default function Home() {
             <h2 className="text-3xl font-bold tracking-tight md:text-4xl">A <span className="text-cyber-primary">safe place</span> to break things</h2>
             <p className="mx-auto mt-3 max-w-2xl text-cyber-muted">Professional tooling, pedagogically sound — crafted with infosec educators and SOC analysts.</p>
           </div>
-          <motion.div variants={containerVariants} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-80px' }} className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 animate-stagger-in">
             {FEATURES.map(f => (
               <FeatureCard key={f.id} feature={f} />
             ))}
-          </motion.div>
+          </div>
         </section>
 
         <section id="paths" className="border-y border-cyber-border bg-cyber-surface/40 py-20">
@@ -255,11 +242,11 @@ export default function Home() {
               <h2 className="text-3xl font-bold tracking-tight md:text-4xl">Choose your <span className="text-cyber-primary">path</span></h2>
               <p className="mx-auto mt-3 max-w-2xl text-cyber-muted">Structured progression from fundamentals to expert operations — with certificates at each milestone.</p>
             </div>
-            <motion.div variants={containerVariants} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-80px' }} className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 animate-stagger-in">
               {PATHS.map(p => (
                 <PathCard key={p.id} path={p} />
               ))}
-            </motion.div>
+            </div>
 
             <div className="mt-10 flex justify-center">
               <Link href="/courses" className="terminal-button-ghost inline-flex items-center gap-2 px-6 py-3">
@@ -300,22 +287,13 @@ export default function Home() {
                     <span className="rounded bg-cyber-primary/15 px-2 py-1 text-xs font-bold text-cyber-primary">{category}</span>
                     <span className="font-medium">{q}</span>
                   </div>
-                  <motion.span animate={{ rotate: faqOpen === q ? 45 : 0 }} className="text-cyber-primary">+</motion.span>
+                  <span style={{ transform: faqOpen === q ? 'rotate(45deg)' : 'rotate(0deg)' }} className="text-cyber-primary transition-transform">+</span>
                 </button>
-                <AnimatePresence initial={false}>
-                  {faqOpen === q && (
-                    <motion.div
-                      id={`faq-${q.slice(0, 12)}`}
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.25 }}
-                      className="overflow-hidden"
-                    >
-                      <p className="px-5 pb-4 text-sm leading-relaxed text-cyber-muted">{a}</p>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                {faqOpen === q && (
+                  <div id={`faq-${q.slice(0, 12)}`} className="animate-fade-in overflow-hidden">
+                    <p className="px-5 pb-4 text-sm leading-relaxed text-cyber-muted">{a}</p>
+                  </div>
+                )}
               </div>
             ))}
           </div>
