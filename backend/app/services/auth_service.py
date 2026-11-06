@@ -124,6 +124,9 @@ class AuthService:
         user.failed_login_attempts = 0
         user.locked_until = None
         user.last_login = datetime.now(UTC)
+        if user.status == UserStatus.PENDING:
+            # First successful login activates the account (mirrors verify-email).
+            user.status = UserStatus.ACTIVE
         await db.commit()
         await db.refresh(user)
 
@@ -197,6 +200,9 @@ class AuthService:
         user.failed_login_attempts = 0
         user.locked_until = None
         user.last_login = datetime.now(UTC)
+        if user.status == UserStatus.PENDING:
+            # First successful login activates the account (mirrors verify-email).
+            user.status = UserStatus.ACTIVE
         await db.commit()
         await db.refresh(user)
 

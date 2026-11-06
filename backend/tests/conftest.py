@@ -11,6 +11,12 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-0123456789abcdef0123456789a
 os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-0123456789abcdef0123456789abc")
 os.environ.setdefault("ENVIRONMENT", "testing")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/15")
+# Rate-limit headroom for suites that register/log in many users per test.
+# The per-test _reset_rate_limits fixture still clears shared counters, so
+# cross-test accumulation stays covered; these only stop a single busy test
+# (register<=20) or login-heavy flow (login<=50) from tripping its own quota.
+os.environ.setdefault("RATE_LIMIT_REGISTER_REQUESTS", "20")
+os.environ.setdefault("RATE_LIMIT_LOGIN_REQUESTS", "50")
 
 # A well-formed dummy Clerk publishable key: the MCP endpoints derive the
 # instance issuer from it at request time, so a fresh clone without real
@@ -87,7 +93,10 @@ async def client(db_engine):
 
     app.dependency_overrides[get_db] = override_get_db
 
-    transport = ASGITransport(app=app)
+    # raise_app_exceptions=False: unhandled endpoint exceptions surface as HTTP
+    # 500 responses instead of tearing down the test with the raw traceback,
+    # so regression tests can assert "must not be 500" directly.
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
 

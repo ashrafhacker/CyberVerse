@@ -1,14 +1,22 @@
-from datetime import UTC
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import ROLE_HIERARCHY, CurrentUser, require_admin, require_moderator, require_super_admin
+from app.api.deps import (
+    ROLE_HIERARCHY,
+    CurrentUser,
+    ensure_can_modify,
+    require_admin,
+    require_moderator,
+    require_super_admin,
+)
 from app.core.database import get_db
 from app.models.user import User, UserRole, UserStatus
 from app.schemas.base import APIResponse, MessageResponse, PaginatedResponse
+from app.services.audit_service import AuditService
 
 router = APIRouter()
 
@@ -94,16 +102,29 @@ async def get_user(
 async def update_user_status(
     user_id: UUID,
     new_status: UserStatus,
-    _: User = Depends(require_admin),
+    current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    # Hierarchy guard: self -> 400, equal/lower rank -> 403 (non-super).
+    ensure_can_modify(current_user, user)
+    before = {"status": user.status.value}
     user.status = new_status
     await db.commit()
     await db.refresh(user)
+    await AuditService.log(
+        db,
+        action="user.status_updated",
+        resource_type="user",
+        resource_id=str(user.id),
+        user_id=current_user.id,
+        before=before,
+        after={"status": user.status.value},
+        meta={"admin": str(current_user.id)},
+    )
     return APIResponse[dict](data=_serialize_user(user))
 
 
@@ -121,31 +142,60 @@ async def update_user_role(
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid role: {new_role}")
 
-    if current_user.id == user_id:
-        raise HTTPException(status_code=400, detail="You cannot change your own role")
-
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    # Hierarchy guard: self -> 400, equal/lower rank -> 403 (non-super).
+    ensure_can_modify(current_user, user)
+
+    before = {"role": user.role.value}
     user.role = role
     await db.commit()
     await db.refresh(user)
+    await AuditService.log(
+        db,
+        action="user.role_updated",
+        resource_type="user",
+        resource_id=str(user.id),
+        user_id=current_user.id,
+        before=before,
+        after={"role": user.role.value},
+        meta={"admin": str(current_user.id)},
+    )
     return APIResponse[dict](data=_serialize_user(user))
 
 
 @router.delete("/{user_id}", response_model=MessageResponse, summary="Soft-delete user (admin)")
 async def delete_user(
     user_id: UUID,
-    _: User = Depends(require_admin),
+    current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    # Hierarchy guard: self -> 400, equal/lower rank -> 403 (non-super).
+    ensure_can_modify(current_user, user)
+    before = {
+        "status": user.status.value,
+        "deleted_at": user.deleted_at.isoformat() if user.deleted_at else None,
+    }
     user.status = UserStatus.INACTIVE
-    from datetime import datetime
     user.deleted_at = datetime.now(UTC)
     await db.commit()
+    await AuditService.log(
+        db,
+        action="user.deleted",
+        resource_type="user",
+        resource_id=str(user.id),
+        user_id=current_user.id,
+        before=before,
+        after={
+            "status": UserStatus.INACTIVE.value,
+            "deleted_at": user.deleted_at.isoformat() if user.deleted_at else None,
+        },
+        meta={"admin": str(current_user.id)},
+    )
     return MessageResponse(message="User deactivated")
