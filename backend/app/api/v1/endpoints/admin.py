@@ -1204,7 +1204,8 @@ async def _pr_check_backend() -> dict:
     try:
         import httpx
         async with httpx.AsyncClient() as client:
-            base = settings.API_BASE_URL; res = await client.get(f"{base}/health", timeout=5.0)
+            base = (settings.PUBLIC_API_URL or "http://127.0.0.1:8000").rstrip("/")
+            res = await client.get(f"{base}/health", timeout=5.0)
             if res.status_code == 200:
                 data = res.json()
                 return {"status":"pass","details":f"FastAPI healthy: {data.get('status')}","latency_ms":data.get("latency_ms"),"last_checked":datetime.now(UTC).isoformat(),"warning":None}
@@ -1247,8 +1248,14 @@ async def _pr_check_cors() -> dict:
 
 async def _pr_check_security() -> dict:
     issues = []; warnings_list = []
-    if not getattr(settings, "JWT_SECRET", None): issues.append("JWT_SECRET missing")
-    elif str(settings.JWT_SECRET) in ("your-secret-key", "test-secret-key", ""): issues.append("JWT_SECRET is default/test value")
+    jwt_secret = getattr(settings, "JWT_SECRET_KEY", None)
+    jwt_secret_value = (
+        jwt_secret.get_secret_value()
+        if hasattr(jwt_secret, "get_secret_value")
+        else ("" if jwt_secret is None else str(jwt_secret))
+    )
+    if not jwt_secret_value: issues.append("JWT_SECRET_KEY missing")
+    elif jwt_secret_value in ("your-secret-key", "test-secret-key", "") or jwt_secret_value.startswith("change-me"): issues.append("JWT_SECRET_KEY is default/test value")
     if getattr(settings, "DEBUG", False): issues.append("DEBUG enabled")
     if "*" in getattr(settings, "CORS_ORIGINS", []): issues.append("Wildcard CORS")
     status = "blocked" if issues else ("warning" if warnings_list else "pass")

@@ -20,8 +20,8 @@ READ-ONLY VERIFICATION RULES (from checkpoint):
 - Security endpoint never exposes secrets/connection strings.
 
 BUILD / TEST COMMANDS:
-- Backend tests: `python -m pytest backend/tests/test_admin_rbac.py -v`
+- Backend tests: `cd backend && PYTHONPATH=. .venv/bin/python -m pytest tests/test_admin_rbac.py -v`
 - Frontend vitest: `cd frontend && npx vitest run app/admin/production-readiness/page.test.tsx`
-- TypeScript: `npx tsc --noEmit`
-- Next.js build: `cd frontend && npx next build`
+- TypeScript: `cd frontend && npx tsc --noEmit`
+- Next.js build: `cd frontend && npm run build`
 - Secret scan: `grep -rni -E 'CLERK_WEBHOOK_SECRET|connection_string' backend/app/ frontend/app/ --exclude-dir=node_modules --exclude-dir=.git | grep -v 'getattr\|Guard\|secret = getattr'` (clean if only guard references remain)

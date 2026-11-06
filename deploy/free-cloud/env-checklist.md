@@ -19,12 +19,12 @@ REQUIRED (must be set in Render dashboard / .env.local / Cloudflare secret):
 - LOG_LEVEL = INFO
 
 OPTIONAL / FREE-TIER REPLACEMENTS:
-- SENDGRID_API_KEY → RESEND_API_KEY (free: 100 emails/day, no CC)
-- EMAIL_BACKEND = resend (or dummy if email not needed temporarily)
+- SENDGRID_API_KEY = (current supported email provider; Resend is not implemented in settings)
+- EMAIL_BACKEND = sendgrid, console, or dummy (resend is not a supported literal)
 - CONTACT_FORM_RECIPIENT = (existing support inbox)
 - SENTRY_DSN = (optional; free tier available)
-- REDIS_MAX_CONNECTIONS = 5 (free tier limit)
-- CELLERY_TASK_LIMIT = 300 (lower from default to match Render free timeout)
+- REDIS_MAX_CONNECTIONS = 5 (optional; code default is 50, minimum is 5)
+- CELERY_TASK_TIME_LIMIT = 300; CELERY_TASK_SOFT_TIME_LIMIT = 270 (code defaults)
 
 NOT SET / NOT REQUIRED (no secret exposure risk):
 - R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_ENDPOINT_URL (optional media storage; not required for readiness)

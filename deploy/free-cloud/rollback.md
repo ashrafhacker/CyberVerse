@@ -8,7 +8,7 @@ PRE-CONDITIONS (current state, branch feat/free-cloud-deployment):
 
 ROLLBACK STEPS (if deploy fails):
 1. Revert branch: `git checkout main` and `git branch -D feat/free-cloud-deployment` (local only).
-2. Restore backend to `a222a54` (HEAD of this branch): `git reset --hard a222a54`.
+2. Restore backend to `a222a54` (parent commit before `a92fee1`): `git reset --hard a222a54`.
 3. Restore `render.yaml` to previous version (no paid-plan changes made; `plan: free` preserved).
 4. If database was accidentally modified: restore from Neon project snapshot (free tier allows point-in-time restore via Neon console — no local action needed; do NOT run migrations backward unless authorized).
 5. If frontend deployed to Vercel/Cloudflare: roll back via platform dashboard (free tier supports redeploy of previous build). No server restart needed.

@@ -41,7 +41,6 @@ def dispatch_email(task, *args, **kwargs):
 
 
 @shared_task(name="app.tasks.email_tasks.send_verification_email")
-@shared_task(name="app.tasks.send_verification_email")
 def send_verification_email(email: str, token: str) -> dict:
     """Send email verification link to new user."""
     try:
@@ -70,7 +69,6 @@ def send_verification_email(email: str, token: str) -> dict:
 
 
 @shared_task(name="app.tasks.email_tasks.send_password_reset_email")
-@shared_task(name="app.tasks.send_password_reset_email")
 def send_password_reset_email(email: str, token: str) -> dict:
     """Send password reset link to user."""
     try:
@@ -99,7 +97,6 @@ def send_password_reset_email(email: str, token: str) -> dict:
 
 
 @shared_task(name="app.tasks.email_tasks.send_contact_notification")
-@shared_task(name="app.tasks.send_contact_notification")
 def send_contact_notification(name: str, email: str, subject: str, message: str) -> dict:
     """Notify the support inbox about a public contact-form submission."""
     from app.core.config import settings  # noqa: PLC0415
@@ -141,7 +138,6 @@ def send_contact_notification(name: str, email: str, subject: str, message: str)
 
 
 @shared_task(name="app.tasks.notification_tasks.send_in_app_notification")
-@shared_task(name="app.tasks.send_in_app_notification")
 def send_in_app_notification(user_id: str, title: str, body: str, notification_type: str = "system", link: str | None = None):
     """Create an in-app notification for a user."""
     from app.core.database import engine  # noqa: PLC0415
@@ -158,7 +154,6 @@ def send_in_app_notification(user_id: str, title: str, body: str, notification_t
 
 
 @shared_task(name="app.tasks.notification_tasks.send_bulk_notifications")
-@shared_task(name="app.tasks.send_bulk_notifications")
 def send_bulk_notifications(user_ids: list[str], title: str, body: str, notification_type: str = "system"):
     """Create bulk in-app notifications for multiple users."""
     from app.core.database import engine  # noqa: PLC0415
@@ -180,7 +175,6 @@ def send_bulk_notifications(user_ids: list[str], title: str, body: str, notifica
 
 
 @shared_task(name="app.tasks.analytics_tasks.recalculate_leaderboards")
-@shared_task(name="app.tasks.recalculate_leaderboards")
 def recalculate_leaderboards() -> dict:
     """Recalculate weekly leaderboard rankings."""
     from app.core.database import engine  # noqa: PLC0415
@@ -196,7 +190,6 @@ def recalculate_leaderboards() -> dict:
 
 
 @shared_task(name="app.tasks.analytics_tasks.cleanup_expired_records")
-@shared_task(name="app.tasks.cleanup_expired_records")
 def cleanup_expired_records() -> dict:
     """Clean up expired revoked sessions."""
     from app.core.database import engine  # noqa: PLC0415
@@ -215,7 +208,6 @@ def cleanup_expired_records() -> dict:
 
 
 @shared_task(name="app.tasks.analytics_tasks.track_event")
-@shared_task(name="app.tasks.track_event")
 def track_event(user_id: str | None, event_type: str, properties: dict | None = None):
     """Track an analytics event."""
     from app.core.database import engine  # noqa: PLC0415
@@ -236,7 +228,6 @@ def track_event(user_id: str | None, event_type: str, properties: dict | None = 
 
 
 @shared_task(name="app.tasks.learning_tasks.rotate_daily_challenges")
-@shared_task(name="app.tasks.rotate_daily_challenges")
 def rotate_daily_challenges() -> dict:
     """Rotate daily challenges - remove expired and create new ones."""
     from app.core.database import engine  # noqa: PLC0415
@@ -271,7 +262,6 @@ def rotate_daily_challenges() -> dict:
 
 
 @shared_task(name="app.tasks.learning_tasks.rotate_weekly_challenges")
-@shared_task(name="app.tasks.rotate_weekly_challenges")
 def rotate_weekly_challenges() -> dict:
     """Rotate weekly challenges - remove expired and create new one."""
     from sqlalchemy.ext.asyncio import async_sessionmaker as _async_sessionmaker  # noqa: PLC0415

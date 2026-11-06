@@ -8,7 +8,7 @@ Verified against official pricing pages; no temporary trial / credit-based usage
 | Neon PostgreSQL (existing project) | 0.25 GB storage, 1 compute hour/month (free for 1 DB) | Existing `DATABASE_URL`; no replacement DB created | NO |
 | Clerk (existing project) | 10,000 Monthly Active Users (free); webhook secret configured | Auth (`CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SECRET`) | NO |
 | Upstash Redis Free | 256 MB, 10k requests/day, TLS (`rediss://`) | `REDIS_URL`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` (see event-replacement.md) | NO |
-| Resend Free | 100 emails/day; SMTP/API; no CC | Email backend (`SENDGRID_API_KEY` replaced; use `RESEND_API_KEY`) | NO |
+| Resend Free | 100 emails/day proposed; not wired into current settings | Future option only; current supported provider is `SENDGRID_API_KEY` with `EMAIL_BACKEND` of `sendgrid`, `console`, or `dummy` | NO |
 | GitHub | Public repos unlimited; Actions minutes (free tier) | Source control; CI checks | NO |
 
 NOTES:
