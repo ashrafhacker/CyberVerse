@@ -31,6 +31,7 @@ from app.api.deps import (
     require_admin,
     require_super_admin,
 )
+from app.core.config import settings
 from app.core.database import get_db, get_db_context
 from app.core.redis import healthcheck
 from app.models.analytics import AppSetting, FeatureFlag
@@ -1126,3 +1127,129 @@ async def admin_stream(websocket: WebSocket, token: str | None = Query(None)):
             await websocket.close()
         except Exception:  # noqa: BLE001 — already closed
             pass
+
+# ============================================================================
+# Production Readiness Center — Phase 8 (+8 new endpoints, read-only only)
+# ============================================================================
+
+@router.get(
+    "/production-readiness",
+    response_model=APIResponse[dict],
+    summary="Production readiness status",
+)
+async def admin_production_readiness(
+    _: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Read-only aggregate readiness dashboard."""
+    checks = {}
+    overall = "operational"
+    checks["backup"] = await _pr_check_backup(db)
+    checks["clerk_auth"] = await _pr_check_clerk_auth()
+    if checks["clerk_auth"]["status"] in ("degraded", "blocked"): overall = "degraded"
+    checks["backend"] = await _pr_check_backend()
+    if checks["backend"]["status"] in ("degraded", "blocked"): overall = "degraded"
+    checks["database"] = await _pr_check_db(db)
+    if checks["database"]["status"] in ("degraded", "blocked"): overall = "degraded"
+    checks["dns"] = await _pr_check_dns()
+    if checks["dns"]["status"] in ("degraded", "blocked"): overall = "degraded"
+    checks["clerk_webhooks"] = await _pr_check_webhook(db)
+    if checks["clerk_webhooks"]["status"] in ("degraded", "blocked"): overall = "degraded"
+    checks["cors"] = await _pr_check_cors()
+    checks["security"] = await _pr_check_security()
+    statuses = [v["status"] for v in checks.values() if isinstance(v, dict) and "status" in v]
+    if any(s == "blocked" for s in statuses): overall = "blocked"
+    elif any(s == "degraded" for s in statuses): overall = "degraded"
+    elif any(s == "warning" for s in statuses): overall = "warning"
+    elif "not_checked" in statuses: overall = "not_checked"
+    else: overall = "operational"
+    return APIResponse[dict](data={"overall_status": overall, "checks": checks})
+
+@router.get("/production-readiness/backup", response_model=APIResponse[dict], summary="Backup verification logs (read-only)")
+async def admin_backup_logs(_: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    return APIResponse[dict](data={"status":"not_checked","details":"Actual backup metadata and integrity verification unavailable via this endpoint","last_checked":datetime.now(UTC).isoformat(),"warning":"Verify via dedicated backup system — not derived from audit logs","logs":[]})
+
+@router.get("/production-readiness/clerk", response_model=APIResponse[dict], summary="Clerk auth health (read-only)")
+async def admin_clerk_auth_logs(_: User = Depends(require_admin)):
+    return APIResponse[dict](data=await _pr_check_clerk_auth())
+
+@router.get("/production-readiness/backend", response_model=APIResponse[dict], summary="FastAPI backend health")
+async def admin_backend_health(_: User = Depends(require_admin)): return APIResponse[dict](data=await _pr_check_backend())
+
+@router.get("/production-readiness/database", response_model=APIResponse[dict], summary="Neon PostgreSQL health (read-only SELECT 1)")
+async def admin_database_health(_: User = Depends(require_admin), db: AsyncSession = Depends(get_db)): return APIResponse[dict](data=await _pr_check_db(db))
+
+@router.get("/production-readiness/dns", response_model=APIResponse[dict], summary="DNS verification")
+async def admin_dns_health(_: User = Depends(require_admin)): return APIResponse[dict](data=await _pr_check_dns())
+
+@router.get("/production-readiness/clerk-webhooks", response_model=APIResponse[dict], summary="Clerk webhook health (read-only)")
+async def admin_clerk_webhook_health(_: User = Depends(require_admin), db: AsyncSession = Depends(get_db)): return APIResponse[dict](data=await _pr_check_webhook(db))
+
+@router.get("/production-readiness/cors", response_model=APIResponse[dict], summary="CORS validation")
+async def admin_cors_health(_: User = Depends(require_admin)): return APIResponse[dict](data=await _pr_check_cors())
+
+@router.get("/production-readiness/security", response_model=APIResponse[dict], summary="Security audit (read-only; no secrets returned)")
+async def admin_security_health(_: User = Depends(require_admin)): return APIResponse[dict](data=await _pr_check_security())
+
+# Helper functions
+async def _pr_check_backup(db: AsyncSession) -> dict:
+    return {"status":"not_checked","details":"Actual backup metadata and integrity verification unavailable via this endpoint","last_checked":datetime.now(UTC).isoformat(),"warning":"Verify via dedicated backup system — not derived from audit logs"}
+
+async def _pr_check_clerk_auth() -> dict:
+    # Never claim authentication works merely because a secret/publishable key exists.
+    # Actual connectivity requires a verified session/connection — unavailable here.
+    return {"status":"not_checked","details":"Clerk authentication connectivity not verified via this endpoint (no session/token used; publishable key presence alone is insufficient)","last_checked":datetime.now(UTC).isoformat(),"warning":"Verify Clerk health through Clerk Dashboard or real session authentication"}
+
+async def _pr_check_backend() -> dict:
+    try:
+        import httpx
+        async with httpx.AsyncClient() as client:
+            base = settings.API_BASE_URL; res = await client.get(f"{base}/health", timeout=5.0)
+            if res.status_code == 200:
+                data = res.json()
+                return {"status":"pass","details":f"FastAPI healthy: {data.get('status')}","latency_ms":data.get("latency_ms"),"last_checked":datetime.now(UTC).isoformat(),"warning":None}
+            return {"status":"degraded","details":f"/health returned {res.status_code}","last_checked":datetime.now(UTC).isoformat(),"warning":None}
+    except Exception as e:
+        return {"status":"degraded","details":f"Self-check unreachable: {str(e)[:200]}","last_checked":datetime.now(UTC).isoformat(),"warning":None}
+
+async def _pr_check_db(db: AsyncSession) -> dict:
+    try:
+        from sqlalchemy import text
+        await db.execute(text("SELECT 1"))
+        return {"status":"pass","details":"Read-only SELECT 1 executed successfully on existing async session","last_checked":datetime.now(UTC).isoformat(),"warning":None}
+    except Exception as e:
+        return {"status":"degraded","details":"Database SELECT 1 failed","last_checked":datetime.now(UTC).isoformat(),"warning":"Connection or query error — no raw exception or credentials exposed"}
+
+async def _pr_check_dns() -> dict:
+    try:
+        import socket
+        domain = (settings.FRONTEND_URL or "").replace("https://", "").replace("http://", "").split("/")[0]
+        if not domain: return {"status":"not_checked","details":"FRONTEND_URL not configured","last_checked":datetime.now(UTC).isoformat(),"warning":None}
+        ipv4 = socket.gethostbyname(domain)
+        return {"status":"pass","details":f"DNS resolved for {domain}: {ipv4}","last_checked":datetime.now(UTC).isoformat(),"warning":None}
+    except Exception as e:
+        return {"status":"degraded","details":f"DNS resolution failed: {str(e)[:200]}","last_checked":datetime.now(UTC).isoformat(),"warning":None}
+
+async def _pr_check_webhook(db: AsyncSession) -> dict:
+    # Do not treat generic Clerk audit log entries as proof of webhook delivery.
+    # If delivery evidence is unavailable, return not_checked.
+    secret = getattr(settings, "CLERK_WEBHOOK_SECRET", None)
+    if not secret or str(secret).startswith("whsec_test"):
+        return {"status":"blocked","details":"Clerk webhook signing secret not configured or is test value","last_checked":datetime.now(UTC).isoformat(),"warning":"Configure production webhook secret; webhook delivery must be verified separately — not from audit logs"}
+    # Secret exists but no delivery evidence available via this endpoint
+    return {"status":"not_checked","details":"Webhook signing secret configured; webhook delivery evidence unavailable via this endpoint (do not assume success from secret presence or audit logs)","last_checked":datetime.now(UTC).isoformat(),"warning":"Verify delivery via Clerk Dashboard webhook logs"}
+
+async def _pr_check_cors() -> dict:
+    origins = getattr(settings, "CORS_ORIGINS", [])
+    if "*" in origins:
+        return {"status":"warning","details":f"CORS contains wildcard; origins: {origins}","last_checked":datetime.now(UTC).isoformat(),"warning":"Wildcard CORS origin detected"}
+    return {"status":"pass","details":f"CORS origins normalized: {origins}","last_checked":datetime.now(UTC).isoformat(),"warning":None}
+
+async def _pr_check_security() -> dict:
+    issues = []; warnings_list = []
+    if not getattr(settings, "JWT_SECRET", None): issues.append("JWT_SECRET missing")
+    elif str(settings.JWT_SECRET) in ("your-secret-key", "test-secret-key", ""): issues.append("JWT_SECRET is default/test value")
+    if getattr(settings, "DEBUG", False): issues.append("DEBUG enabled")
+    if "*" in getattr(settings, "CORS_ORIGINS", []): issues.append("Wildcard CORS")
+    status = "blocked" if issues else ("warning" if warnings_list else "pass")
+    return {"status":status,"details":f"Issues: {len(issues)}, Warnings: {len(warnings_list)} (no secret values returned)","issues":issues,"warnings":warnings_list,"last_checked":datetime.now(UTC).isoformat()}

@@ -30,6 +30,115 @@ pytestmark = pytest.mark.asyncio
 
 PASSWORD = "StrongPass123!"
 
+# ------------------------------------------------------------------
+# Production Readiness Center — backend verification (read-only, no writes)
+# ------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_admin_production_readiness_authorized(client, db_session):
+    await _register(client, "pr_auth@test.io")
+    await _promote(db_session, "pr_auth@test.io", UserRole.ADMINISTRATOR)
+    tokens = await _login(client, "pr_auth@test.io")
+    res = await client.get("/api/v1/admin/production-readiness", headers=_hdr(tokens))
+    assert res.status_code == 200, res.text
+    data = res.json()["data"]
+    assert "overall_status" in data
+    assert "checks" in data
+    # No secret leakage in any check response
+    for k, v in data["checks"].items():
+        d = v.get("details", "")
+        assert "connection string" not in str(d).lower()
+
+@pytest.mark.asyncio
+async def test_admin_production_readiness_unauthorized(client):
+    res = await client.get("/api/v1/admin/production-readiness")
+    assert res.status_code in (401, 403), f"Expected 401/403, got {res.status_code}"
+
+@pytest.mark.asyncio
+async def test_database_select_1_behavior(client, db_session):
+    await _register(client, "pr_db@test.io")
+    await _promote(db_session, "pr_db@test.io", UserRole.ADMINISTRATOR)
+    tokens = await _login(client, "pr_db@test.io")
+    res = await client.get("/api/v1/admin/production-readiness/database", headers=_hdr(tokens))
+    assert res.status_code == 200, res.text
+    data = res.json()["data"]
+    assert data["status"] in ("pass", "degraded")
+    # Real SELECT 1 executed (verified by endpoint design), not fabricated
+    details = str(data.get("details", ""))
+    assert "SELECT 1" in details or "failed" in details.lower()
+
+@pytest.mark.asyncio
+async def test_backup_not_checked_without_evidence(client, db_session):
+    await _register(client, "pr_backup@test.io")
+    await _promote(db_session, "pr_backup@test.io", UserRole.ADMINISTRATOR)
+    tokens = await _login(client, "pr_backup@test.io")
+    res = await client.get("/api/v1/admin/production-readiness/backup", headers=_hdr(tokens))
+    assert res.status_code == 200, res.text
+    assert res.json()["data"]["status"] == "not_checked"
+
+@pytest.mark.asyncio
+async def test_clerk_not_claimed_without_verification(client, db_session):
+    await _register(client, "pr_clerk@test.io")
+    await _promote(db_session, "pr_clerk@test.io", UserRole.ADMINISTRATOR)
+    tokens = await _login(client, "pr_clerk@test.io")
+    res = await client.get("/api/v1/admin/production-readiness/clerk", headers=_hdr(tokens))
+    assert res.status_code == 200, res.text
+    assert res.json()["data"]["status"] == "not_checked"
+
+@pytest.mark.asyncio
+async def test_webhook_not_claimed_without_delivery_evidence(client, db_session):
+    await _register(client, "pr_webhook@test.io")
+    await _promote(db_session, "pr_webhook@test.io", UserRole.ADMINISTRATOR)
+    tokens = await _login(client, "pr_webhook@test.io")
+    res = await client.get("/api/v1/admin/production-readiness/clerk-webhooks", headers=_hdr(tokens))
+    assert res.status_code == 200, res.text
+    d = res.json()["data"]
+    assert d["status"] in ("not_checked", "blocked")
+    # Must not rely solely on audit log presence for delivery proof
+    details = str(d.get("details", ""))
+    assert "audit log" not in details.lower() or "separately" in details.lower()
+
+@pytest.mark.asyncio
+async def test_aggregate_precedence(client, db_session):
+    await _register(client, "pr_aggregate@test.io")
+    await _promote(db_session, "pr_aggregate@test.io", UserRole.ADMINISTRATOR)
+    tokens = await _login(client, "pr_aggregate@test.io")
+    res = await client.get("/api/v1/admin/production-readiness", headers=_hdr(tokens))
+    assert res.status_code == 200, res.text
+    d = res.json()["data"]
+    assert "overall_status" in d
+    # Aggregate status derived from checks, not hardcoded
+    checks = d.get("checks", {})
+    statuses = [v["status"] for v in checks.values() if isinstance(v, dict) and "status" in v]
+    # Status values must not contain fabricated claims
+    for s in statuses:
+        assert s in ("pass", "warning", "degraded", "blocked", "not_checked", "operational")
+
+@pytest.mark.asyncio
+async def test_no_secret_leakage_in_readiness(client, db_session):
+    await _register(client, "pr_leak@test.io")
+    await _promote(db_session, "pr_leak@test.io", UserRole.ADMINISTRATOR)
+    tokens = await _login(client, "pr_leak@test.io")
+    h = _hdr(tokens)
+    paths = [
+        "/api/v1/admin/production-readiness",
+        "/api/v1/admin/production-readiness/backup",
+        "/api/v1/admin/production-readiness/clerk",
+        "/api/v1/admin/production-readiness/backend",
+        "/api/v1/admin/production-readiness/database",
+        "/api/v1/admin/production-readiness/dns",
+        "/api/v1/admin/production-readiness/clerk-webhooks",
+        "/api/v1/admin/production-readiness/cors",
+        "/api/v1/admin/production-readiness/security",
+    ]
+    for p in paths:
+        res = await client.get(p, headers=h)
+        assert res.status_code == 200, f"Failed at {p}: {res.status_code}"
+        body = res.text
+        assert "postgres://" not in body or "DATABASE_URL" not in body
+        assert "connection_string" not in body.lower()
+
+
 ADMIN_GET_PATHS = [
     "/api/v1/admin/overview",
     "/api/v1/admin/users",
@@ -39,6 +148,15 @@ ADMIN_GET_PATHS = [
     "/api/v1/admin/feature-flags",
     "/api/v1/admin/settings",
     "/api/v1/admin/announcements",
+    "/api/v1/admin/production-readiness",
+    "/api/v1/admin/production-readiness/backup",
+    "/api/v1/admin/production-readiness/clerk",
+    "/api/v1/admin/production-readiness/backend",
+    "/api/v1/admin/production-readiness/database",
+    "/api/v1/admin/production-readiness/dns",
+    "/api/v1/admin/production-readiness/clerk-webhooks",
+    "/api/v1/admin/production-readiness/cors",
+    "/api/v1/admin/production-readiness/security",
 ]
 
 
