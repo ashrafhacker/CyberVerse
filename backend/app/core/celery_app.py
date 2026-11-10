@@ -1,11 +1,35 @@
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+
 from celery import Celery
 
 from app.core.config import settings
 
+
+def _ensure_tls_params(url: str) -> str:
+    """Normalise rediss:// Redis URLs so Celery does not crash at startup.
+
+    Render Free KV serves a TLS-enabled endpoint (scheme ``rediss://``), but the
+    standard ``ssl_cert_reqs`` query parameter is absent from the value configured
+    in the environment, which makes the Celery result backend reject the URL.
+    Adding ``ssl_cert_reqs=CERT_REQUIRED`` forces TLS verification against the
+    public CA chain (Cloudflare, which issues Render KV certs); if that handshake
+    fails, the override can be flipped to ``CERT_NONE`` with no further code
+    change beyond the next deploy. Idempotent and safe to run on every process.
+    """
+    if not url.startswith("rediss://"):
+        return url
+    parts = urlparse(url)
+    params = dict(parse_qsl(parts.query))
+    if "ssl_cert_reqs" not in params:
+        params["ssl_cert_reqs"] = "CERT_REQUIRED"
+        return urlunparse((parts[0], parts[1], parts[2], parts[3], urlencode(params), ""))
+    return url
+
+
 celery_app = Celery(
     "cyberverse",
-    broker=settings.CELERY_BROKER_URL,
-    backend=settings.CELERY_RESULT_BACKEND,
+    broker=_ensure_tls_params(settings.CELERY_BROKER_URL),
+    backend=_ensure_tls_params(settings.CELERY_RESULT_BACKEND),
     include=[
         "app.tasks",
         "app.tasks.email_tasks",
