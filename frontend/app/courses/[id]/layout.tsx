@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
-const BASE = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://cyberverse.io';
-const BACKEND = process.env.BACKEND_URL ?? 'http://127.0.0.1:8000';
+const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://cyberverse.io';
+const BACKEND = process.env.BACKEND_URL || 'http://127.0.0.1:8000';
 
 interface CoursePayload {
   name?: string;
