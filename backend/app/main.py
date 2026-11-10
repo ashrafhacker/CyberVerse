@@ -487,7 +487,7 @@ def _customize_openapi(app: FastAPI) -> None:
         schema["info"]["contact"] = {"name": "CyberVerse Platform", "url": "https://cyberverse.io", "email": "support@cyberverse.io"}
         schema["servers"] = [
             {"url": "https://api.cyberverse.io", "description": "Production"},
-            {"url": "https://staging-api.cyberverse.io", "description": "Staging"},
+            {"url": "https://cyberverse-staging-api.onrender.com", "description": "Staging"},
             {"url": "http://localhost:8000", "description": "Local"},
         ]
         # Add BearerAuth scheme
