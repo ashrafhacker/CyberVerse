@@ -26,6 +26,9 @@ def _serialize(cert, template, course_name: str | None = None) -> dict:
         "verification_code": cert.verification_code,
         "status": cert.status.value if hasattr(cert.status, "value") else cert.status,
         "pdf_url": cert.pdf_url,
+        "signature": (cert.meta_data or {}).get("signature"),
+        "signature_valid": CertificateService.verify_signature(cert),
+        "verify_path": f"/certificates/verify/{cert.verification_code}",
         "issued_at": cert.issued_at.isoformat() if cert.issued_at else None,
         "expires_at": cert.expires_at.isoformat() if cert.expires_at else None,
     }

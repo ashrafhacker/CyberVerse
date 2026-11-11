@@ -1,11 +1,15 @@
 """Certificate issuance, listing, and verification for CyberVerse."""
 
+import hashlib
+import hmac
 import secrets
 from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import settings
 
 from app.models.certificate import (
     Certificate,
@@ -47,6 +51,46 @@ class CertificateService:
     @staticmethod
     def _generate_code() -> str:
         return secrets.token_hex(16).upper()
+
+    # ─── Ed-signing (HMAC-SHA256) ──────────────────────────────────────────
+    _SIGNATURE_VERSION = "cyberverse-cert-v1"
+
+    @staticmethod
+    def signature_material(cert: Certificate) -> str:
+        issued = cert.issued_at.isoformat() if cert.issued_at else ""
+        return "|".join(
+            [
+                CertificateService._SIGNATURE_VERSION,
+                cert.verification_code,
+                str(cert.user_id),
+                cert.source_type,
+                cert.source_id or "",
+                cert.full_name,
+                issued,
+            ]
+        )
+
+    @staticmethod
+    def compute_signature(cert: Certificate) -> str:
+        key = settings.SECRET_KEY.get_secret_value().encode()
+        return hmac.new(key, CertificateService.signature_material(cert).encode(), hashlib.sha256).hexdigest()
+
+    @staticmethod
+    def ensure_signature(cert: Certificate) -> str:
+        meta = dict(cert.meta_data or {})
+        sig = meta.get("signature")
+        if not sig:
+            sig = CertificateService.compute_signature(cert)
+            meta["signature"] = sig
+            cert.meta_data = meta
+        return sig
+
+    @staticmethod
+    def verify_signature(cert: Certificate) -> bool:
+        stored = (cert.meta_data or {}).get("signature")
+        if not stored:
+            return False
+        return hmac.compare_digest(stored, CertificateService.compute_signature(cert))
 
     @staticmethod
     async def issue_course_certificate(
@@ -93,6 +137,7 @@ class CertificateService:
             full_name=user.full_name if user else "CyberVerse Student",
             issued_at=datetime.now(UTC),
         )
+        CertificateService.ensure_signature(certificate)
         db.add(certificate)
         await db.flush()
 

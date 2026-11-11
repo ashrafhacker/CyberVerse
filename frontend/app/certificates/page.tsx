@@ -134,14 +134,23 @@ export default function CertificatesPage() {
                           </div>
                         </div>
                       </div>
-                      <button
-                        onClick={() => copyCode(cert.verification_code)}
-                        className="flex items-center gap-2 rounded border border-cyber-border px-3 py-1.5 font-mono text-xs text-cyber-secondary hover:border-cyber-primary transition-colors"
-                        title="Copy verification code"
-                      >
-                        <Copy className="h-3 w-3" />
-                        {cert.verification_code.slice(0, 10)}…
-                      </button>
+                      <div className="flex flex-col items-end gap-2">
+                        <Link
+                          href={`/certificates/print/${cert.id}`}
+                          className="flex items-center gap-2 rounded border border-cyber-primary/50 px-3 py-1.5 text-xs font-semibold text-cyber-primary transition-colors hover:bg-cyber-primary/10"
+                          title="Print or save as PDF"
+                        >
+                          Print / PDF
+                        </Link>
+                        <button
+                          onClick={() => copyCode(cert.verification_code)}
+                          className="flex items-center gap-2 rounded border border-cyber-border px-3 py-1.5 font-mono text-xs text-cyber-secondary hover:border-cyber-primary transition-colors"
+                          title="Copy verification code"
+                        >
+                          <Copy className="h-3 w-3" />
+                          {cert.verification_code.slice(0, 10)}…
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
