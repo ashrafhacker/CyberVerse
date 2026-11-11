@@ -36,8 +36,8 @@ from app.core.database import get_db, get_db_context
 from app.core.redis import healthcheck
 from app.models.analytics import AppSetting, FeatureFlag
 from app.models.notification import Announcement
-from app.models.premium import Subscription, SubscriptionPlan
-from app.models.session import AuditLog
+from app.models.premium import Payment, PaymentStatus, Subscription, SubscriptionPlan
+from app.models.session import AuditLog, LoginHistory, Session
 from app.models.support import SupportTicket, TicketMessage, TicketPriority, TicketStatus
 from app.models.user import User, UserRole, UserStatus
 from app.schemas.base import APIResponse, MessageResponse
@@ -420,6 +420,177 @@ async def admin_bulk_status(
 
 
 # --------------------------------------------------------------------------
+# User login control: sessions & login history (admin)
+# --------------------------------------------------------------------------
+
+
+async def _require_target_user(db: AsyncSession, user_id: UUID) -> User:
+    target = (
+        await db.execute(select(User).where(User.id == user_id))
+    ).scalar_one_or_none()
+    if target is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return target
+
+
+def _session_row(s: Session) -> dict:
+    return {
+        "id": str(s.id),
+        "ip_address": s.ip_address,
+        "user_agent": (s.user_agent or "")[:200],
+        "location": s.location,
+        "device_info": s.device_info or {},
+        "created_at": _iso(s.created_at),
+        "expires_at": _iso(s.expires_at),
+    }
+
+
+@router.get(
+    "/users/{user_id}/sessions",
+    response_model=APIResponse[list],
+    summary="List a user's active login sessions (admin)",
+)
+async def admin_list_user_sessions(
+    user_id: UUID,
+    _: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_target_user(db, user_id)
+    now = datetime.now(UTC)
+    rows = (
+        await db.execute(
+            select(Session)
+            .where(
+                Session.user_id == user_id,
+                Session.is_revoked.is_(False),
+                Session.expires_at > now,
+            )
+            .order_by(Session.created_at.desc())
+            .limit(100)
+        )
+    ).scalars().all()
+    return APIResponse[list](data=[_session_row(s) for s in rows])
+
+
+@router.delete(
+    "/users/{user_id}/sessions/{session_id}",
+    response_model=MessageResponse,
+    summary="Revoke one of a user's login sessions (admin force logout)",
+)
+async def admin_revoke_user_session(
+    user_id: UUID,
+    session_id: UUID,
+    actor: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_target_user(db, user_id)
+    session = (
+        await db.execute(
+            select(Session).where(Session.id == session_id, Session.user_id == user_id)
+        )
+    ).scalar_one_or_none()
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.is_revoked:
+        raise HTTPException(status_code=409, detail="Session already revoked")
+
+    session.is_revoked = True
+    session.revoked_at = datetime.now(UTC)
+    session.revoked_by = str(actor.id)
+    await db.commit()
+
+    await AuditService.log(
+        db,
+        action="user.session_revoked",
+        resource_type="session",
+        resource_id=str(session_id),
+        user_id=actor.id,
+        after={"target_user": str(user_id), "revoked_by": str(actor.id)},
+        meta={"admin": str(actor.id)},
+    )
+    return MessageResponse(message="Session revoked")
+
+
+@router.post(
+    "/users/{user_id}/sessions/revoke-all",
+    response_model=APIResponse[dict],
+    summary="Revoke all of a user's active sessions (force logout everywhere)",
+)
+async def admin_revoke_all_user_sessions(
+    user_id: UUID,
+    actor: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    target = await _require_target_user(db, user_id)
+    if target.id == actor.id:
+        raise HTTPException(status_code=400, detail="Cannot force logout yourself")
+
+    now = datetime.now(UTC)
+    rows = (
+        await db.execute(
+            select(Session).where(
+                Session.user_id == user_id,
+                Session.is_revoked.is_(False),
+                Session.expires_at > now,
+            )
+        )
+    ).scalars().all()
+    for s in rows:
+        s.is_revoked = True
+        s.revoked_at = now
+        s.revoked_by = str(actor.id)
+    await db.commit()
+
+    await AuditService.log(
+        db,
+        action="user.sessions_revoked_all",
+        resource_type="user",
+        resource_id=str(user_id),
+        user_id=actor.id,
+        after={"target_user": str(user_id), "revoked_count": len(rows)},
+        meta={"admin": str(actor.id)},
+    )
+    return APIResponse[dict](data={"revoked": len(rows)})
+
+
+@router.get(
+    "/users/{user_id}/login-history",
+    response_model=APIResponse[list],
+    summary="List a user's login history (admin)",
+)
+async def admin_user_login_history(
+    user_id: UUID,
+    _: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(50, ge=1, le=200),
+):
+    await _require_target_user(db, user_id)
+    rows = (
+        await db.execute(
+            select(LoginHistory)
+            .where(LoginHistory.user_id == user_id)
+            .order_by(LoginHistory.created_at.desc())
+            .limit(limit)
+        )
+    ).scalars().all()
+    return APIResponse[list](
+        data=[
+            {
+                "id": str(h.id),
+                "success": h.success,
+                "ip_address": h.ip_address,
+                "user_agent": (h.user_agent or "")[:200],
+                "location": h.location,
+                "method": h.method,
+                "failure_reason": h.failure_reason,
+                "created_at": _iso(h.created_at),
+            }
+            for h in rows
+        ]
+    )
+
+
+# --------------------------------------------------------------------------
 # Audit logs
 # --------------------------------------------------------------------------
 
@@ -736,6 +907,71 @@ async def admin_subscriptions(
             }
             for s, email, plan_name in rows
         ]
+    )
+
+
+@router.get(
+    "/payments", response_model=APIResponse[dict], summary="List payments with revenue stats (admin)"
+)
+async def admin_payments(
+    _: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(200, ge=1, le=500),
+):
+    """Admin payments ledger: recent payment rows plus aggregate revenue stats."""
+    rows = (
+        await db.execute(
+            select(Payment).order_by(Payment.created_at.desc()).limit(limit)
+        )
+    ).scalars().all()
+
+    user_ids = {p.user_id for p in rows if p.user_id}
+    emails: dict[UUID, str] = {}
+    if user_ids:
+        emails = dict(
+            (await db.execute(select(User.id, User.email).where(User.id.in_(user_ids)))).all()
+        )
+
+    by_status: dict[str, int] = {}
+    gross_completed = 0.0
+    refunded = 0.0
+    for p in rows:
+        st = _enum_val(p.status)
+        by_status[st] = by_status.get(st, 0) + 1
+        if p.status == PaymentStatus.COMPLETED:
+            gross_completed += float(p.amount)
+        elif p.status == PaymentStatus.REFUNDED:
+            refunded += float(p.amount)
+
+    return APIResponse[dict](
+        data={
+            "stats": {
+                "total": len(rows),
+                "by_status": by_status,
+                "gross_completed": round(gross_completed, 2),
+                "refunded": round(refunded, 2),
+                "currency": rows[0].currency if rows else "USD",
+            },
+            "payments": [
+                {
+                    "id": str(p.id),
+                    "user_id": str(p.user_id) if p.user_id else None,
+                    "user_email": emails.get(p.user_id),
+                    "payment_intent_id": p.payment_intent_id,
+                    "status": _enum_val(p.status),
+                    "amount": float(p.amount),
+                    "currency": p.currency,
+                    "payment_method": p.payment_method,
+                    "provider": p.provider,
+                    "description": p.description,
+                    "failure_reason": p.failure_reason,
+                    "paid_at": _iso(p.paid_at),
+                    "refunded_at": _iso(p.refunded_at),
+                    "created_at": _iso(p.created_at),
+                }
+                for p in rows
+            ],
+        }
     )
 
 

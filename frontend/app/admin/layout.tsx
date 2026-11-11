@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Shield, Users, ShieldCheck, Megaphone, Wrench, Settings } from 'lucide-react';
+import { Shield, Users, ShieldCheck, Megaphone, Wrench, Settings, CreditCard, BadgeCheck } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { isAdmin, SUPER_ROLES } from '@/lib/roles';
 import { ErrorBoundary } from '@/components/AdminUI';
@@ -38,6 +38,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const nav = [
     { label: 'Overview', href: '/admin', icon: ShieldCheck },
     { label: 'Users', href: '/admin/users', icon: Users },
+    { label: 'Payments', href: '/admin/payments', icon: CreditCard },
+    { label: 'Subscriptions', href: '/admin/subscriptions', icon: BadgeCheck },
     { label: 'Tickets', href: '/admin/tickets', icon: Megaphone },
     { label: 'Audit', href: '/admin/audit', icon: Shield },
     { label: 'Feature Flags', href: '/admin/flags', icon: Wrench },
