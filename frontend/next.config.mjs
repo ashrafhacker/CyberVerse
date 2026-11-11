@@ -88,76 +88,24 @@ const nextConfig = {
   // package isn't installed and no module imports an .svg, so the rule was dead
   // config — and it blocked `next dev --turbopack`. Removed.
   async headers() {
-    // Defense-in-depth headers. CSP stays permissive on script/style sources
-    // (Next.js inline boot scripts + styled-jsx require 'unsafe-inline'); it
-    // still constrains object/frame/media sources and blocks cross-origin
-    // framing. HSTS intentionally omitted: this deployment is plain-HTTP
+    // Defense-in-depth headers (non-CSP). The Content-Security-Policy now
+    // lives in middleware.ts as a per-request nonce policy; the static CSP
+    // that used to be declared here was removed in the same change because
+    // browsers enforce multiple CSPs additively — both policies would fight
+    // each other. HSTS intentionally omitted: this deployment is plain-HTTP
     // localhost — enable only after TLS is confirmed in production.
-    // Clerk ($CLERK) loads its browser bundle and hosted UI (sign-in modal)
-    // from its own origins, so those hosts must be allowlisted or the client
-    // throws ClerkRuntimeError: failed_to_load_clerk_js. The array covers both
-    // production (clerk.com) and development FAPI (*.clerk.accounts.dev).
-    // Derive the instance's own Clerk Frontend API origin from the publishable
-    // key so *any* instance is allowlisted without editing this file:
-    // development (*.clerk.accounts.dev) and, crucially, production on a custom
-    // domain (clerk.<yourdomain> + the hosted portal at accounts.<yourdomain>).
-    // The key's middle segment is base64("<frontend-api-host>$").
-    const clerkPkOrigins = (() => {
-      try {
-        const b64 = (process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? '').split('_')[2] ?? '';
-        if (!b64) return [];
-        const host = Buffer.from(b64, 'base64').toString('utf8').replace(/\$$/, '');
-        if (!host) return [];
-        const origins = [`https://${host}`];
-        // Production FAPI is clerk.<domain>; the hosted Account Portal is
-        // accounts.<domain>. Allowlist the portal too when that shape applies.
-        if (host.startsWith('clerk.')) origins.push(`https://accounts.${host.slice('clerk.'.length)}`);
-        return origins;
-      } catch {
-        return [];
-      }
-    })();
-    const clerkOrigins = Array.from(
-      new Set([
-        'https://clerk.com',
-        'https://*.clerk.com',
-        'https://*.clerk.accounts.dev',
-        ...clerkPkOrigins,
-        // NEXT_PUBLIC_CLERK_JS_URL escape hatch: when set, clerk-js is served
-        // from an alternate CDN (e.g. jsDelivr). Its origin must be in
-        // script-src or the overridden bundle is blocked by CSP. Only added at
-        // build time when the env var is present — no effect otherwise.
-        ...(process.env.NEXT_PUBLIC_CLERK_JS_URL
-          ? [new URL(process.env.NEXT_PUBLIC_CLERK_JS_URL).origin]
-          : []),
-      ]),
-    ).join(' ');
-    const csp = [
-      "default-src 'self'",
-      `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${clerkOrigins}`,
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob: https:",
-      `font-src 'self' data: ${clerkOrigins}`,
-      "media-src 'self' blob: data: https:",
-      "worker-src 'self' blob:",
-      "connect-src 'self' https: wss:",
-      `frame-src 'self' ${clerkOrigins}`,
-      "frame-ancestors *",
-      "base-uri 'self'",
-      "form-action 'self'",
-    ].join('; ');
     return [
       {
         source: '/:path*',
         headers: [
           { key: 'X-Content-Type-Options', value: 'nosniff' },
-          // X-Frame-Options intentionally omitted: it can't express "allow all",
-          // and CSP frame-ancestors above is the controlling directive. Needed
-          // so the app can be embedded (e.g. in a preview/iframe). Re-add
-          // "DENY" for production hardening if embedding isn't required.
+          // X-Frame-Options intentionally omitted: it cannot express an
+          // origin allowlist. Framing is governed by CSP frame-ancestors,
+          // set in middleware.ts (staging policy: 'self' + vercel.com,
+          // narrowed from the previous `*`). Re-add "DENY" here for
+          // production hardening if embedding isn't required.
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' },
-          { key: 'Content-Security-Policy', value: csp },
         ],
       },
     ];

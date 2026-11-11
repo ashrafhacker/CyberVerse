@@ -52,6 +52,14 @@ const clerkPreconnectOrigin = (() => {
 // fetch — roughly 6x the entire homepage JS bundle, on every page.
 //
 // Every other --font-* token was defined but never referenced.
+
+// Required for the per-request nonce CSP in middleware.ts: pages are
+// prerendered at build time by default, and build-time HTML cannot carry a
+// per-request nonce (the nonce would be baked in and reused for everyone).
+// STAGING ONLY — do not merge to main without reviewing the TTFB impact of
+// every route becoming dynamically rendered on promotion.
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   // Without an explicit base, Next falls back to http://localhost:3000 and
   // logs a warning on every build, and any absolute OG/Twitter URL resolves

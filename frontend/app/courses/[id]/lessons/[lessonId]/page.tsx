@@ -471,6 +471,7 @@ export default function LessonPlayerPage() {
   const [progressEntry, setProgressEntry] = useState<ProgressEntry | null>(null);
   const [watchPct, setWatchPct] = useState(0);
   const watchPctRef = useRef(0);
+  const [videoSrc, setVideoSrc] = useState<string | null>(null);
 
   useEffect(() => {
     setToken(getTokens().access);
@@ -570,6 +571,36 @@ export default function LessonPlayerPage() {
 
   const lessonIndex = lessons.findIndex((l) => l.id === lessonId);
   const lesson = lessonIndex >= 0 ? lessons[lessonIndex] : lessons[0];
+
+  // Signed media URL for <video>: /stream answers 307 → signed R2 URL, and
+  // browsers block no-cors <video> loads that redirect cross-origin (Chrome:
+  // ERR_BLOCKED_BY_ORB), so the player must load the R2 bytes directly. The
+  // presign endpoint runs the same authorization check as /stream.
+  useEffect(() => {
+    if (!lesson?.asset || lesson.type !== 'video' || lesson.asset.startsWith('gdrive://')) {
+      setVideoSrc(null);
+      return;
+    }
+    let cancelled = false;
+    setVideoSrc(null);
+    (async () => {
+      try {
+        const res = await api.get<{ data: { url: string; expires_in: number } }>(
+          `/media/presign?path=${encodeURIComponent(lesson.asset)}`,
+          { cache: 'no-store' },
+        );
+        if (!cancelled) setVideoSrc(res.data.url);
+      } catch {
+        // Fallback to the legacy streaming URL: served without a redirect
+        // where R2 is not configured (local dev), so no ORB issue there.
+        if (!cancelled) {
+          setVideoSrc(`${API_URL}/media/stream?path=${encodeURIComponent(lesson.asset)}${token ? `&token=${token}` : ''}`);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [lesson?.id, lesson?.asset, lesson?.type, token]);
+
   const prevLesson = lessonIndex > 0 ? lessons[lessonIndex - 1] : null;
   const nextLesson = lessonIndex >= 0 && lessonIndex < lessons.length - 1 ? lessons[lessonIndex + 1] : null;
 
@@ -670,17 +701,23 @@ export default function LessonPlayerPage() {
             {/* Player */}
             <div className="mb-6">
               {isVideo ? (
-                <VideoPlayer
-                  key={lesson.id}
-                  src={assetUrl}
-                  title={lesson.title}
-                  lessonId={lesson.id}
-                  canTrack={!!token}
-                  initialResume={progressEntry?.last_position?.seconds ?? 0}
-                  baselineWatched={progressEntry?.last_position?.watched_seconds ?? null}
-                  baselinePct={progressEntry?.progress_percentage ?? 0}
-                  onWatchPercent={handleWatchPercent}
-                />
+                videoSrc ? (
+                  <VideoPlayer
+                    key={lesson.id}
+                    src={videoSrc}
+                    title={lesson.title}
+                    lessonId={lesson.id}
+                    canTrack={!!token}
+                    initialResume={progressEntry?.last_position?.seconds ?? 0}
+                    baselineWatched={progressEntry?.last_position?.watched_seconds ?? null}
+                    baselinePct={progressEntry?.progress_percentage ?? 0}
+                    onWatchPercent={handleWatchPercent}
+                  />
+                ) : (
+                  <div className="flex aspect-video w-full items-center justify-center rounded-lg bg-black text-sm text-cyber-muted">
+                    Preparing secure video stream…
+                  </div>
+                )
               ) : (
                 <PdfViewer src={assetUrl} title={lesson.title} />
               )}
