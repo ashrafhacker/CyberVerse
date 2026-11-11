@@ -50,6 +50,25 @@ function generateNonce(): string {
 // never talk to production. Add the prod origin here only when promoting.
 const API_ORIGINS = ['https://cyberverse-staging-api.onrender.com'];
 
+// R2 storage origin (server-only env). Lesson PDFs iframe the API's
+// /media/stream, which 307-redirects to a presigned R2 URL; CSP frame-src
+// checks every hop of a frame-navigation redirect chain, so the final
+// storage destination must be allowlisted too.
+const R2_ORIGINS = (() => {
+  const origins: string[] = [];
+  if (process.env.R2_ACCOUNT_ID) {
+    origins.push(`https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`);
+  }
+  if (process.env.R2_ENDPOINT_URL) {
+    try {
+      origins.push(new URL(process.env.R2_ENDPOINT_URL).origin);
+    } catch {
+      // Unparseable endpoint — leave unset rather than guess.
+    }
+  }
+  return origins;
+})();
+
 // Clerk Frontend API origin derived from the publishable key (the key's
 // middle segment is base64("<frontend-api-host>$")). atob instead of Buffer
 // for edge-runtime safety. Covers the staging instance
@@ -116,6 +135,7 @@ function buildCsp(nonce: string): string {
     "'self'",
     ...clerkOrigins,
     ...API_ORIGINS, // lesson PDF previews served from the API host
+    ...R2_ORIGINS, // /media/stream 307s the frame to the presigned R2 URL
     'https://drive.google.com', // lesson Drive-preview iframes
     'https://challenges.cloudflare.com', // Turnstile challenge iframe
     'https://*.protect.clerk.com',

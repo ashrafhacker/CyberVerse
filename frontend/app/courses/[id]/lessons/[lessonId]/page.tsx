@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { useAuth } from '@clerk/nextjs';
 import {
   Play, Pause, Volume2, VolumeX, Maximize, ChevronLeft,
   ChevronRight, BookOpen, FileText, Lock, CheckCircle,
@@ -50,6 +51,8 @@ function VideoPlayer({
   const [buffering, setBuffering] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [watchPct, setWatchPct] = useState(baselinePct);
+  const [timeText, setTimeText] = useState<string | null>(null); // "0:35 / 1:34" clock
+  const [resumeAt, setResumeAt] = useState<number | null>(null); // saved position the player restored
 
   // ── watch-tracking state (refs so handlers always see fresh values) ──
   const bucketsRef = useRef<Uint8Array | null>(null); // one slot per second of the video
@@ -145,6 +148,7 @@ function VideoPlayer({
     if (!v) return;
     const dur = isFinite(v.duration) ? v.duration : 0;
     durRef.current = dur;
+    setTimeText(`${fmtTime(v.currentTime)} / ${fmtTime(dur)}`);
     if (!bucketsRef.current && dur > 0) bucketsRef.current = new Uint8Array(Math.ceil(dur));
     if (baselineWatched === null && baselinePct > 0 && dur > 0) {
       baseWatchedRef.current = (baselinePct / 100) * dur;
@@ -157,7 +161,12 @@ function VideoPlayer({
     } else if (!resumeDoneRef.current) {
       resumeDoneRef.current = true;
       const pos = initialResume;
-      if (pos > 5 && dur > 0 && pos < dur - 8) v.currentTime = pos;
+      if (pos > 5 && dur > 0 && pos < dur - 8) {
+        v.currentTime = pos;
+        // Surface the restored position YouTube-style so the learner can see
+        // where they are picking up (and start over if it was unwanted).
+        setResumeAt(pos);
+      }
     }
     recomputePct();
   };
@@ -172,6 +181,7 @@ function VideoPlayer({
     // Count only natural forward playback; large jumps are seeks (count nothing).
     if (last !== null && t >= last && t - last <= 2) markWatched(last, t);
     lastTRef.current = t;
+    setTimeText(`${fmtTime(t)} / ${fmtTime(dur)}`);
     setProgress((t / dur) * 100);
     recomputePct();
     maybeSave();
@@ -237,6 +247,8 @@ function VideoPlayer({
     restoreAndPlay();
   };
 
+  // YouTube keeps the "resume from" prompt up until dismissed — we clear it on
+  // play (onPlay) or on either button click, so it never outstays its welcome.
   // Flush telemetry when leaving the lesson or hiding the tab.
   useEffect(() => {
     const flush = () => send('in_progress');
@@ -294,7 +306,7 @@ function VideoPlayer({
         onContextMenu={(e) => e.preventDefault()}
         onLoadedMetadata={onLoadedMetadata}
         onTimeUpdate={onTimeUpdate}
-        onPlay={() => { wasPlayingRef.current = true; setPlaying(true); }}
+        onPlay={() => { wasPlayingRef.current = true; setPlaying(true); setResumeAt(null); }}
         onPause={() => { wasPlayingRef.current = false; setPlaying(false); send('in_progress'); }}
         onPlaying={onPlayingUI}
         onCanPlay={onCanPlay}
@@ -347,6 +359,37 @@ function VideoPlayer({
         {fmtPct >= COMPLETION_MIN_PERCENT && <CheckCircle className="h-3.5 w-3.5 text-cyber-success" />}
       </div>
 
+      {/* "Resume from where you left off?" prompt — YouTube-style */}
+      {resumeAt != null && (
+        <div
+          className="absolute left-3 bottom-16 z-10 flex items-center gap-3 rounded border border-white/10 bg-black/85 px-3 py-2 text-xs text-white/90 shadow-lg backdrop-blur-sm"
+          role="status"
+        >
+          <span className="font-mono">
+            Resume from{' '}
+            <span className="font-semibold text-cyber-primary">{fmtTime(resumeAt)}</span>?
+          </span>
+          <button
+            onClick={() => {
+              setResumeAt(null);
+              void videoRef.current?.play().catch(() => {});
+            }}
+            className="rounded bg-cyber-primary/90 px-2.5 py-1 text-[11px] font-semibold text-cyber-bg transition-colors hover:bg-cyber-primary"
+          >
+            Resume
+          </button>
+          <button
+            onClick={() => {
+              if (videoRef.current) videoRef.current.currentTime = 0;
+              setResumeAt(null);
+            }}
+            className="rounded px-2.5 py-1 text-[11px] text-white/70 transition-colors hover:text-white"
+          >
+            Start over
+          </button>
+        </div>
+      )}
+
       {/* Controls overlay */}
       <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-3 opacity-0 group-hover:opacity-100 transition-opacity">
         {/* Progress bar */}
@@ -360,6 +403,10 @@ function VideoPlayer({
           <button onClick={toggle} className="text-white hover:text-cyber-primary transition-colors" aria-label={playing ? 'Pause' : 'Play'}>
             {playing ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
           </button>
+          {/* Playback clock — current position / total duration */}
+          <span className="text-white/80 text-xs font-mono tabular-nums" aria-label="Playback time">
+            {timeText ?? '0:00 / --:--'}
+          </span>
           <button
             onClick={() => { setMuted(!muted); if (videoRef.current) videoRef.current.muted = !muted; }}
             className="text-white hover:text-cyber-primary transition-colors"
@@ -456,9 +503,21 @@ function lessonTypeOf(l: { lesson_type?: string; resources?: Array<{ path?: stri
   return l.lesson_type === 'video' ? 'video' : 'pdf';
 }
 
+// ─── Playback clock (m:ss, or h:mm:ss past an hour) ──────────────────────────
+function fmtTime(total: number): string {
+  if (!isFinite(total) || total < 0) return '0:00';
+  const s = Math.floor(total % 60);
+  const m = Math.floor((total / 60) % 60);
+  const h = Math.floor(total / 3600);
+  const mm = h > 0 ? String(m).padStart(2, '0') : String(m);
+  const ss = String(s).padStart(2, '0');
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function LessonPlayerPage() {
   const { id, lessonId } = useParams<{ id: string; lessonId: string }>();
+  const { getToken } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [token, setToken] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
@@ -474,8 +533,28 @@ export default function LessonPlayerPage() {
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
 
   useEffect(() => {
-    setToken(getTokens().access);
-  }, []);
+    let cancelled = false;
+    // Clerk session tokens are short-lived (~60 s). The api client refreshes
+    // them on 401, but a token embedded in an <iframe src> must be minted at
+    // mount time — the storage copy is usually already expired by then.
+    // Prefer the live Clerk token; fall back to the storage token when Clerk
+    // is unavailable (e.g. token-provider edge cases during first load).
+    void (async () => {
+      try {
+        const fresh = await getToken();
+        if (!cancelled && fresh) {
+          setToken(fresh);
+          return;
+        }
+      } catch {
+        // fall through to the storage token
+      }
+      if (!cancelled) setToken(getTokens().access);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [getToken]);
 
   useEffect(() => {
     setCompleted(false);
