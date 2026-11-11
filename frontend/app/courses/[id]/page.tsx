@@ -11,6 +11,43 @@ import { useAuth } from '@/lib/auth';
 import { CURRICULUM } from '@/lib/curriculum';
 import { api } from '@/lib/api';
 
+// YouPI-PG integrates via a tiny embed script (no npm SDK). The script is
+// cached at module scope so repeated enrollment clicks never inject a
+// duplicate <script> tag.
+let youpiScriptPromise: Promise<void> | null = null;
+function loadYoupiScript(payDomain: string, publicKey: string, currency: string): Promise<void> {
+  if (youpiScriptPromise) return youpiScriptPromise;
+  youpiScriptPromise = new Promise<void>((resolve, reject) => {
+    if (document.querySelector('script[data-youpi-js="true"]')) {
+      resolve();
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = `${payDomain.replace(/\/+$/, '')}/youpi.js`;
+    script.async = true;
+    script.dataset.youpiJs = 'true';
+    script.dataset.youpiKey = publicKey;
+    script.dataset.currency = currency;
+    script.onload = () => resolve();
+    script.onerror = () => {
+      youpiScriptPromise = null;
+      reject(new Error('Could not load the payment module. Please try again.'));
+    };
+    document.body.appendChild(script);
+  });
+  return youpiScriptPromise;
+}
+
+interface YoupiPayOptions {
+  order_id: string;
+  amount: number;
+  currency: string;
+  name: string;
+  description?: string;
+  handler?: (response: { orderId?: string; utr?: string; event?: string }) => void;
+  onClose?: () => void;
+}
+
 interface CourseDetail {
   id: string;
   name: string;
@@ -102,6 +139,7 @@ export default function CourseDetailPage() {
   const [data, setData] = useState<CourseDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [enrolling, setEnrolling] = useState(false);
+  const [paymentNotice, setPaymentNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -136,15 +174,57 @@ export default function CourseDetailPage() {
     setEnrolling(true);
     try {
       if (data?.is_premium && (user?.role === 'guest' || user?.role === 'student')) {
+        setPaymentNotice(null);
         const res = await api.get<{ data: Array<{ id: string; slug?: string; name: string }> }>('/premium/plans');
         const plans = res?.data ?? [];
         const beginner = plans.find((p) => /beginner/i.test(p.name) || /beginner/i.test(p.slug ?? '')) ?? plans[0];
         if (!beginner) throw new Error('No premium plans available');
-        const checkout = await api.post<{ data: { checkout_url: string } }>('/premium/checkout', { plan_id: beginner.id });
-        if (checkout?.data?.checkout_url) {
-          window.location.href = checkout.data.checkout_url;
+        const checkout = await api.post<{
+          data: {
+            youpi_enabled: boolean;
+            youpi_unavailable_reason?: string;
+            pay_domain?: string | null;
+            merchant_public_key?: string | null;
+            order_id?: string | null;
+            amount?: number;
+            currency: string;
+            name?: string;
+            description?: string;
+            plan_name?: string;
+          };
+        }>('/premium/checkout', { plan_id: beginner.id });
+        const cfg = checkout?.data;
+        if (!cfg?.youpi_enabled || !cfg.pay_domain || !cfg.merchant_public_key || !cfg.order_id) {
+          const reason = cfg?.youpi_unavailable_reason;
+          setError(
+            reason === 'currency_mismatch'
+              ? 'Online payments are unavailable for this plan (currency not supported). Please contact the site owner to unlock premium.'
+              : 'Online payments are not available right now. Please contact the site owner to unlock premium.',
+          );
           return;
         }
+        await loadYoupiScript(cfg.pay_domain, cfg.merchant_public_key, cfg.currency);
+        const Youpi = (window as unknown as { Youpi?: { pay: (opts: YoupiPayOptions) => void } }).Youpi;
+        if (!Youpi?.pay) {
+          throw new Error('Payment module failed to initialise. Please try again.');
+        }
+        // The YouPI-PG handler means "the gateway saw a transfer attempt" — it
+        // is NOT proof of payment. Premium unlocks only after the bank
+        // reconciles the transaction (server-side webhook).
+        Youpi.pay({
+          order_id: cfg.order_id,
+          amount: cfg.amount ?? 0,
+          currency: cfg.currency,
+          name: cfg.name ?? 'CyberVerse',
+          description: cfg.description ?? `CyberVerse ${cfg.plan_name ?? 'Premium'} Plan`,
+          handler: () => {
+            setPaymentNotice(
+              'Payment seen. Premium unlocks automatically once your bank confirms the transaction (reconciliation usually completes within minutes to hours). If it does not activate within 24 hours, contact the site owner.',
+            );
+          },
+          onClose: () => setEnrolling(false),
+        });
+        return;
       }
 
       await api.post(`/courses/${id}/enroll`);
@@ -203,6 +283,11 @@ export default function CourseDetailPage() {
       )}
       <main className="mx-auto max-w-5xl px-6 py-8">
         {error && <div className="mb-6 text-cyber-danger">{error}</div>}
+        {paymentNotice && (
+          <div className="mb-6 rounded border border-cyber-success/30 bg-cyber-success/10 px-4 py-3 text-sm text-cyber-success">
+            {paymentNotice}
+          </div>
+        )}
 
         {data && (
           <>

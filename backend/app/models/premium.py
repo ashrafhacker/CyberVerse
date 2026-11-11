@@ -187,7 +187,7 @@ class Payment(Base):
     amount: Mapped[Numeric] = mapped_column(Numeric(10, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
     payment_method: Mapped[str] = mapped_column(String(50), default="card", nullable=False)
-    provider: Mapped[str] = mapped_column(String(50), default="razorpay", nullable=False)
+    provider: Mapped[str] = mapped_column(String(50), default="youpi", nullable=False)
 
     description: Mapped[str | None] = mapped_column(String(300), nullable=True)
     failure_reason: Mapped[str | None] = mapped_column(String(300), nullable=True)

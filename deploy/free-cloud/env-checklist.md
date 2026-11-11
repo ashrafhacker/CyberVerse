@@ -29,6 +29,6 @@ OPTIONAL / FREE-TIER REPLACEMENTS:
 NOT SET / NOT REQUIRED (no secret exposure risk):
 - R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_ENDPOINT_URL (optional media storage; not required for readiness)
 - OPENAI_API_KEY / GEMINI_API_KEY (optional AI; no impact on readiness)
-- RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET (optional payments; not required)
+- YOUPI_API_DOMAIN / YOUPI_MERCHANT_PUBLIC_KEY / YOUPI_WEBHOOK_SECRET (optional payments via YouPI-PG; not required until YouPI-PG is deployed)
 - GOOGLE_CLIENT_ID / GITHUB_CLIENT_ID (optional OAuth; not required)
 - PROMETHEUS_ENABLED = false (free tier; no metrics server needed)

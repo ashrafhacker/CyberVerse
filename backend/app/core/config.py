@@ -289,12 +289,12 @@ class Settings(BaseSettings):
     THUMBNAIL_HEIGHT: int = Field(default=360)
 
     # -------------------------------------------------------------------
-    # Payments (Razorpay)
+    # Payments (YouPI-PG)
     # -------------------------------------------------------------------
-    RAZORPAY_KEY_ID: str | None = None
-    RAZORPAY_KEY_SECRET: SecretStr | None = None
-    RAZORPAY_WEBHOOK_SECRET: SecretStr | None = None
-    RAZORPAY_CURRENCY: str = Field(default="INR")
+    YOUPI_API_DOMAIN: str | None = None
+    YOUPI_MERCHANT_PUBLIC_KEY: str | None = None
+    YOUPI_WEBHOOK_SECRET: SecretStr | None = None
+    YOUPI_CURRENCY: str = Field(default="INR")
     BILLING_TRIAL_DAYS: int = Field(default=7, ge=0, le=30)
 
     # -------------------------------------------------------------------

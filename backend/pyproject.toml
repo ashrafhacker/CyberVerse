@@ -30,7 +30,6 @@ dependencies = [
     "pyotp>=2.9.0",
     "qrcode>=7.4.2",
     "supabase>=2.3.4",
-    "razorpay>=1.4.1",
     "sendgrid>=6.11.0",
 ]
 
