@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Breadcrumbs from '@/components/Breadcrumbs';
-import { API_URL, api, getTokens } from '@/lib/api';
+import { API_URL, api, getTokens, ApiError } from '@/lib/api';
 import { CURRICULUM } from '@/lib/curriculum';
 
 // ─── Completion verification constants (mirror backend) ──────────────────────
@@ -441,6 +441,30 @@ function VideoPlayer({
   );
 }
 
+// ─── Blocked-content notice ─────────────────────────────────────────────────
+function BlockedContentNotice({ id, message }: { id: string; message: string }) {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-cyber-bg px-6 text-center">
+      <Lock className="h-12 w-12 text-cyber-primary" aria-hidden="true" />
+      <h1 className="text-xl font-bold text-cyber-text">This content is blocked</h1>
+      <p className="max-w-md text-sm text-cyber-muted">
+        {message || 'You do not have access to this lesson right now.'}
+      </p>
+      <p className="max-w-md text-sm text-cyber-muted">
+        If you believe you should be able to see this, contact the site owner and they will sort it out.
+      </p>
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <Link href="/contact" className="terminal-button px-4 py-2 text-sm">
+          Contact the site owner
+        </Link>
+        <Link href={`/courses/${id}`} className="terminal-button px-4 py-2 text-sm">
+          Back to Course
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 // ─── PDF Viewer ───────────────────────────────────────────────────────────────
 function PdfViewer({ src, title }: { src: string; title: string }) {
   return (
@@ -531,6 +555,7 @@ export default function LessonPlayerPage() {
   const [watchPct, setWatchPct] = useState(0);
   const watchPctRef = useRef(0);
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
+  const [blocked, setBlocked] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -571,6 +596,7 @@ export default function LessonPlayerPage() {
   useEffect(() => {
     if (isStatic) return;
     setLoadError(null);
+    setBlocked(null);
     if (!UUID_RE.test(lessonId)) {
       setLoadError('Lesson not found.');
       return;
@@ -582,7 +608,13 @@ export default function LessonPlayerPage() {
         const res = await api.get<{ data: ApiLesson }>(`/lessons/${lessonId}`);
         if (!cancelled) setApiLesson(res.data);
       } catch (err) {
-        if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Failed to load lesson');
+        if (!cancelled) {
+          if (err instanceof ApiError && err.isAuthError()) {
+            setBlocked(err.message || 'You do not have access to this content.');
+          } else {
+            setLoadError(err instanceof Error ? err.message : 'Failed to load lesson');
+          }
+        }
       }
       try {
         const res = await api.get<{ data: StructureCourse }>(`/courses/${id}`);
@@ -662,6 +694,7 @@ export default function LessonPlayerPage() {
     }
     let cancelled = false;
     setVideoSrc(null);
+    setBlocked(null);
     (async () => {
       try {
         const res = await api.get<{ data: { url: string; expires_in: number } }>(
@@ -669,7 +702,13 @@ export default function LessonPlayerPage() {
           { cache: 'no-store' },
         );
         if (!cancelled) setVideoSrc(res.data.url);
-      } catch {
+      } catch (err) {
+        if (!cancelled && err instanceof ApiError && err.isAuthError()) {
+          // Premium/authorization failure — the stream fallback would fail the
+          // same check, so fail friendly instead of loading a dud URL.
+          setBlocked(err.message || 'You do not have access to this content.');
+          return;
+        }
         // Fallback to the legacy streaming URL: served without a redirect
         // where R2 is not configured (local dev), so no ORB issue there.
         if (!cancelled) {
@@ -682,6 +721,10 @@ export default function LessonPlayerPage() {
 
   const prevLesson = lessonIndex > 0 ? lessons[lessonIndex - 1] : null;
   const nextLesson = lessonIndex >= 0 && lessonIndex < lessons.length - 1 ? lessons[lessonIndex + 1] : null;
+
+  if (blocked) {
+    return <BlockedContentNotice id={id} message={blocked} />;
+  }
 
   if (loadError) {
     return (
