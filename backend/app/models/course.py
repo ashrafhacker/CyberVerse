@@ -78,7 +78,7 @@ class LearningPath(Base):
     tags: Mapped[list[str]] = mapped_column(FlexibleArray(str), default=list, nullable=False)
 
     status: Mapped[ContentStatus] = mapped_column(
-        SQLEnum(ContentStatus, native_enum=False),
+        SQLEnum(ContentStatus, native_enum=False, values_callable=lambda cls: [m.value for m in cls]),
         default=ContentStatus.DRAFT,
         nullable=False,
     )
@@ -148,7 +148,7 @@ class Course(Base):
     tags: Mapped[list[str]] = mapped_column(FlexibleArray(str), default=list, nullable=False)
 
     status: Mapped[ContentStatus] = mapped_column(
-        SQLEnum(ContentStatus, native_enum=False),
+        SQLEnum(ContentStatus, native_enum=False, values_callable=lambda cls: [m.value for m in cls]),
         default=ContentStatus.DRAFT,
         nullable=False,
     )
