@@ -22,6 +22,7 @@ from app.api.deps import get_db, get_optional_user
 from app.core.config import get_settings
 from app.core.r2_storage import get_r2_bucket, get_r2_client, is_missing_object_error
 from app.models.user import User
+from app.schemas.base import APIResponse
 
 router = APIRouter()
 # Find project root - works in both repo layout and container layout
@@ -170,6 +171,45 @@ async def stream_asset(
             "X-Frame-Options": "SAMEORIGIN",
             "Content-Security-Policy": "default-src 'self' blob: data: 'unsafe-inline'; img-src 'self' data: blob:; frame-ancestors 'self'",
         },
+    )
+
+
+@router.get("/presign", summary="Get a short-lived signed URL for an authorized course asset")
+async def presign_asset(
+    path: str = Query(..., description="Relative object path inside assets/courses/"),
+    current_user: User | None = Depends(get_optional_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Authorize and hand the signed R2 URL to the client for direct loading.
+
+    Browsers block no-cors subresource loads (e.g. ``<video src>``) that redirect
+    cross-origin — Chrome reports ``ERR_BLOCKED_BY_ORB`` — so media elements
+    cannot follow ``/stream``'s 307 to the signed R2 URL. This endpoint runs the
+    same authorization check as ``/stream`` and returns the signed URL instead,
+    letting the media element fetch bytes straight from R2.
+    """
+    key = _normalize_asset_path(path)
+    await _authorize_course_asset(key, current_user, db)
+
+    client, bucket = get_r2_client(), get_r2_bucket()
+    if client is None or not bucket:
+        raise HTTPException(status_code=503, detail="Private media storage is not configured")
+
+    try:
+        await run_in_threadpool(client.head_object, Bucket=bucket, Key=key)
+        url = await run_in_threadpool(_presign_get, key)
+    except Exception as exc:
+        if not is_missing_object_error(exc):
+            # Do not silently fall back on auth, credential, or network errors.
+            if isinstance(exc, (ClientError, BotoCoreError)):
+                raise HTTPException(
+                    status_code=502, detail="Private media storage is temporarily unavailable"
+                ) from exc
+            raise
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    return APIResponse[dict](
+        data={"url": url, "expires_in": get_settings().SIGNED_URL_EXPIRE_SECONDS}
     )
 
 
