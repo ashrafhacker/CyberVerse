@@ -1,0 +1,30 @@
+# Keeps the Render staging API awake.
+# Free-tier Render spins down after ~15 min idle → first request pays a 30-60s cold start.
+# Ping every 10 min so staging stays warm. Staging API only — never production.
+name: Staging Keep-Alive
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    name: Ping staging API
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake cyberverse-staging-api.onrender.com
+        run: |
+          for i in 1 2 3; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 60 \
+              "https://cyberverse-staging-api.onrender.com/api/v1/courses" || echo 000)
+            echo "attempt $i -> HTTP $code"
+            # Any HTTP response (incl. 401/404) proves the service is awake.
+            if [ "$code" != "000" ]; then exit 0; fi
+            sleep 15
+          done
+          echo "staging API did not respond"
+          exit 1
