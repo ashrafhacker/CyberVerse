@@ -18,7 +18,11 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-config.set_main_option("sqlalchemy.url", settings.database_url_async)
+# configparser performs % interpolation on values set via set_main_option;
+# escape literal % (e.g. percent-encoded password chars) so URLs like
+# "...:Neohacker%%4051.0000@host" survive. Alembic/SQLAlchemy decode the
+# resulting ini value correctly.
+config.set_main_option("sqlalchemy.url", settings.database_url_async.replace("%", "%%"))
 
 target_metadata = Base.metadata
 
