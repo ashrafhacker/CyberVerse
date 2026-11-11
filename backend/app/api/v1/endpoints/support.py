@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -9,6 +10,8 @@ from app.api.deps import CurrentUser
 from app.core.database import get_db
 from app.models.support import FAQItem, SupportTicket, TicketMessage
 from app.schemas.base import APIResponse, PaginatedResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -43,6 +46,42 @@ async def create_ticket(
     db.add(ticket)
     await db.commit()
     await db.refresh(ticket)
+
+    if request.category in ("content", "billing"):
+        # Best-effort admin alert — "content" tickets are also how blocked-content
+        # reports surface, and billing tickets need fast admin eyes.
+        try:
+            from app.models.notification import NotificationType
+            from app.services.notification_service import NotificationService
+
+            is_content = request.category == "content"
+            reporter = getattr(user, "full_name", None) or getattr(user, "email", "a user")
+            await NotificationService.notify_admins(
+                db,
+                title=(
+                    f"Blocked-content report — {ticket.ticket_number}"
+                    if is_content
+                    else f"Billing ticket — {ticket.ticket_number}"
+                ),
+                body=f"{reporter}: {request.subject}"[:1000],
+                notification_type=(
+                    NotificationType.SECURITY if is_content else NotificationType.PREMIUM
+                ),
+                icon="flag" if is_content else "credit-card",
+                link="/admin/tickets",
+                data={
+                    "ticket_id": str(ticket.id),
+                    "ticket_number": ticket.ticket_number,
+                    "category": request.category,
+                },
+                commit=True,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to notify admins about ticket %s",
+                ticket.ticket_number,
+                exc_info=True,
+            )
 
     return APIResponse[dict](
         data={

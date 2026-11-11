@@ -1,9 +1,12 @@
+import logging
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.notification import Notification, NotificationChannel, NotificationType
+
+logger = logging.getLogger(__name__)
 
 
 class NotificationService:
@@ -59,6 +62,60 @@ class NotificationService:
             )
         await db.commit()
         return len(user_ids)
+
+    @staticmethod
+    async def notify_admins(
+        db: AsyncSession,
+        *,
+        title: str,
+        body: str,
+        notification_type: NotificationType = NotificationType.SYSTEM,
+        link: str | None = None,
+        icon: str | None = None,
+        data: dict | None = None,
+        commit: bool = False,
+    ) -> int:
+        """Best-effort in-app notification to every administrator-ish user.
+
+        Targets the same role set as the ``require_admin`` dependency
+        (administrator / developer / super_admin). Never raises — a
+        notification failure must not break the parent flow. When
+        ``commit`` is False the rows join the caller's transaction; the
+        caller is responsible for committing.
+
+        Returns the number of admins notified (0 on failure).
+        """
+        from app.models.user import User, UserRole
+
+        try:
+            result = await db.execute(
+                select(User.id).where(
+                    User.role.in_(
+                        [UserRole.ADMINISTRATOR, UserRole.DEVELOPER, UserRole.SUPER_ADMIN]
+                    )
+                )
+            )
+            admin_ids = [row[0] for row in result.all()]
+            if not admin_ids:
+                return 0
+            for admin_id in admin_ids:
+                db.add(
+                    Notification(
+                        user_id=admin_id,
+                        title=title[:200],
+                        body=body,
+                        notification_type=notification_type,
+                        link=link,
+                        icon=icon,
+                        data=data or {},
+                    )
+                )
+            if commit:
+                await db.commit()
+            return len(admin_ids)
+        except Exception:
+            logger.exception("notify_admins failed for %r", title)
+            return 0
 
     @staticmethod
     async def mark_read(db: AsyncSession, user_id: UUID, notification_id: UUID) -> bool:

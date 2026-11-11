@@ -10,9 +10,11 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import CacheService
 from app.core.config import settings
+from app.core.database import get_db
 from app.schemas.base import APIResponse, MessageResponse
 
 router = APIRouter()
@@ -36,7 +38,11 @@ class ContactRequest(BaseModel):
     status_code=202,
     summary="Submit the public contact form",
 )
-async def submit_contact(payload: ContactRequest, request: Request):
+async def submit_contact(
+    payload: ContactRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
     ip = request.client.host if request.client else "unknown"
     try:
         used = await CacheService(prefix="contact").increment(f"rate:{ip}", amount=1, ttl=3600)
@@ -50,6 +56,25 @@ async def submit_contact(payload: ContactRequest, request: Request):
         )
 
     from app.tasks import dispatch_email, send_contact_notification  # noqa: PLC0415
+
+    # Best-effort admin alert — the public contact form (and the "blocked
+    # content? contact the site owner" link) lands here; surface it in-app.
+    try:
+        from app.models.notification import NotificationType
+        from app.services.notification_service import NotificationService
+
+        await NotificationService.notify_admins(
+            db,
+            title=f"Contact: {payload.subject[:160]}",
+            body=f"{payload.name} <{payload.email}> — {payload.message}"[:1000],
+            notification_type=NotificationType.SYSTEM,
+            icon="mail",
+            link="/contact",
+            data={"email": payload.email, "subject": payload.subject},
+            commit=True,
+        )
+    except Exception:
+        logger.warning("Failed to notify admins about contact submission", exc_info=True)
 
     dispatch_email(
         send_contact_notification,

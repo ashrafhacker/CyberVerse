@@ -10,6 +10,7 @@ id. If a row already exists for the same email (a pre-Clerk account) it is
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -18,6 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.clerk import email_verified, primary_email
 from app.models.progress import PlayerProgress
 from app.models.user import AuthProvider, Profile, User, UserRole, UserStatus
+
+logger = logging.getLogger(__name__)
 
 
 async def _unique_username(db: AsyncSession, base: str) -> str:
@@ -73,11 +76,14 @@ async def sync_clerk_user(
 
     now = datetime.now(UTC)
 
+    is_new_user = False
+
     if user is None:
         if not email:
             # Clerk can (rarely) have a user with no email — we require one to
             # key the account. Reject rather than create an unusable row.
             raise ValueError("Clerk user has no email address to sync")
+        is_new_user = True
         username = await _unique_username(db, email.split("@")[0])
         user = User(
             email=email,
@@ -111,4 +117,25 @@ async def sync_clerk_user(
     user.locked_until = None
     await db.commit()
     await db.refresh(user)
+
+    if is_new_user:
+        # Best-effort admin alert — runs after the user row is committed so a
+        # notification failure can never break signups.
+        try:
+            from app.models.notification import NotificationType
+            from app.services.notification_service import NotificationService
+
+            await NotificationService.notify_admins(
+                db,
+                title="New user registered",
+                body=f"{full_name} ({email}) just joined CyberVerse.",
+                notification_type=NotificationType.SYSTEM,
+                icon="user-plus",
+                link="/admin/users",
+                data={"user_id": str(user.id), "email": email},
+                commit=True,
+            )
+        except Exception:
+            logger.warning("Failed to notify admins about new user %s", user.id, exc_info=True)
+
     return user

@@ -17,6 +17,7 @@ from app.models.certificate import (
     CertificateTemplate,
     CertificateType,
 )
+from app.models.notification import NotificationType
 from app.models.progress import Enrollment
 from app.services.notification_service import NotificationService
 
@@ -148,6 +149,21 @@ class CertificateService:
             f"You earned a CyberVerse certificate for completing {course.name}.",
             link="/certificates",
             icon="award",
+            commit=False,
+        )
+        # Notify the admin team (best-effort; rides the caller's transaction).
+        await NotificationService.notify_admins(
+            db,
+            title="Certificate issued",
+            body=f"{certificate.full_name} earned a certificate for completing {course.name}.",
+            notification_type=NotificationType.COURSE,
+            icon="award",
+            link="/admin",
+            data={
+                "certificate_id": str(certificate.id),
+                "verification_code": certificate.verification_code,
+                "course_id": str(source_id),
+            },
             commit=False,
         )
         return certificate
