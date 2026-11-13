@@ -5,8 +5,12 @@ import { usePathname } from 'next/navigation';
 import {
   Award,
   BookOpen,
+  Bug,
+  Building2,
   ChevronLeft,
+  Command,
   Compass,
+  Fingerprint,
   Flag,
   LayoutDashboard,
   Network,
@@ -33,11 +37,15 @@ interface NavItem {
 
 const PRIMARY: NavItem[] = [
   { href: '/dashboard-v2', label: 'Command Center', icon: LayoutDashboard },
+  { href: '/hacker-city', label: 'Hacker City', icon: Building2 },
   { href: '/courses', label: 'Learn', icon: BookOpen },
   { href: '/missions', label: 'Missions', icon: Swords },
+  { href: '/terminal-wars', label: 'Terminal Wars', icon: Command },
+  { href: '/web-exploit-arena', label: 'Web Exploit Arena', icon: Bug },
   { href: '/labs', label: 'Cyber Labs', icon: Terminal },
   { href: '/ctf', label: 'CTF Arena', icon: Flag },
   { href: '/soc', label: 'SOC Center', icon: Radar },
+  { href: '/digital-forensics', label: 'Digital Forensics', icon: Fingerprint },
   { href: '/threat-intel', label: 'Threat Intel', icon: Compass },
   { href: '/tools', label: 'Cyber Tools', icon: Wrench },
 ];

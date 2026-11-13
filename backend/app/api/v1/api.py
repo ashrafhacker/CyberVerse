@@ -17,6 +17,7 @@ from app.api.v1.endpoints import (
     contact,
     courses,
     ctf,
+    digital_forensics,
     game,
     instructor,
     labs,
@@ -50,6 +51,7 @@ api_router.include_router(courses.router, prefix="/courses", tags=["Courses"])
 api_router.include_router(lessons.router, prefix="/lessons", tags=["Lessons"])
 api_router.include_router(ai.router, prefix="/ai", tags=["AI"])
 api_router.include_router(chat.router, prefix="/chat", tags=["Chat"])
+api_router.include_router(digital_forensics.router, prefix="/digital-forensics", tags=["Digital Forensics"])
 api_router.include_router(game.router, prefix="/game", tags=["Game"])
 api_router.include_router(leaderboard.router, prefix="/leaderboard", tags=["Leaderboard"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["Notifications"])

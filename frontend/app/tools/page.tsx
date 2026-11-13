@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Shield, Wrench, Search, Code, Terminal, Github, ExternalLink, Flag, Globe } from 'lucide-react';
+import { Shield, Wrench, Search, Code, Terminal, Github, ExternalLink, Flag, Globe, Fingerprint } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 
 const INTERNAL_TOOLS = [
@@ -31,6 +31,13 @@ const INTERNAL_TOOLS = [
     description: 'Triage simulated alerts and drive incidents through the full investigation and containment lifecycle.',
     icon: Terminal,
     href: '/soc',
+    internal: true,
+  },
+  {
+    title: 'Digital Forensics',
+    description: 'Work forensic cases, log evidence with chain-of-custody tracking, and document incident timelines.',
+    icon: Fingerprint,
+    href: '/digital-forensics',
     internal: true,
   },
   {

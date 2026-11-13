@@ -31,6 +31,7 @@ from app.models.course import (
     QuizQuestion,
 )
 from app.models.ctf import Challenge, CTFCategory, FlagSubmission
+from app.models.digital_forensics import ForensicCase, ForensicEvidence
 from app.models.lab import (
     LabAuditLog,
     LabEvent,
