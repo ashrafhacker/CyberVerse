@@ -39,6 +39,8 @@ function loadYoupiScript(payDomain: string, publicKey: string, currency: string)
 }
 
 interface YoupiPayOptions {
+  /** Gateway-created payment session URL — required by the SDK to open the modal. */
+  checkoutUrl?: string;
   order_id: string;
   amount: number;
   currency: string;
@@ -183,9 +185,12 @@ export default function CourseDetailPage() {
           data: {
             youpi_enabled: boolean;
             youpi_unavailable_reason?: string;
+            gateway_code?: string | null;
             pay_domain?: string | null;
             merchant_public_key?: string | null;
             order_id?: string | null;
+            payment_id?: string | null;
+            checkout_url?: string | null;
             amount?: number;
             currency: string;
             name?: string;
@@ -194,12 +199,19 @@ export default function CourseDetailPage() {
           };
         }>('/premium/checkout', { plan_id: beginner.id });
         const cfg = checkout?.data;
-        if (!cfg?.youpi_enabled || !cfg.pay_domain || !cfg.merchant_public_key || !cfg.order_id) {
+        if (!cfg?.youpi_enabled || !cfg.pay_domain || !cfg.merchant_public_key || !cfg.order_id || !cfg.payment_id) {
           const reason = cfg?.youpi_unavailable_reason;
+          const gatewayCode = cfg?.gateway_code;
           setError(
             reason === 'currency_mismatch'
               ? 'Online payments are unavailable for this plan (currency not supported). Please contact the site owner to unlock premium.'
-              : 'Online payments are not available right now. Please contact the site owner to unlock premium.',
+              : reason === 'session_creation_failed'
+                ? gatewayCode === 'OBSERVERS_UNHEALTHY'
+                  ? 'The payment gateway is still completing its setup (bank observer not paired yet). Please try again later or contact the site owner to unlock premium.'
+                  : gatewayCode === 'GATEWAY_UNREACHABLE'
+                    ? 'The payment gateway is temporarily unreachable. Please try again in a few minutes or contact the site owner to unlock premium.'
+                    : 'The payment gateway could not start your payment. Please try again later or contact the site owner to unlock premium.'
+                : 'Online payments are not available right now. Please contact the site owner to unlock premium.',
           );
           return;
         }
@@ -211,7 +223,11 @@ export default function CourseDetailPage() {
         // The YouPI-PG handler means "the gateway saw a transfer attempt" — it
         // is NOT proof of payment. Premium unlocks only after the bank
         // reconciles the transaction (server-side webhook).
+        // checkoutUrl is built from pay_domain (the public portal origin the
+        // site controls) rather than the gateway-returned URL, whose origin
+        // depends on the gateway's own CHECKOUT_PUBLIC_URL env.
         Youpi.pay({
+          checkoutUrl: `${cfg.pay_domain.replace(/\/+$/, '')}/checkout/${cfg.payment_id}`,
           order_id: cfg.order_id,
           amount: cfg.amount ?? 0,
           currency: cfg.currency,

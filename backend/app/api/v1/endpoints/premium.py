@@ -6,6 +6,7 @@ import re
 import secrets
 from datetime import UTC, datetime, timedelta
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -18,6 +19,80 @@ from app.schemas.base import APIResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+async def _create_youpi_session(
+    order_id: str,
+    *,
+    amount: float,
+    currency: str,
+    plan: SubscriptionPlan,
+) -> tuple[dict | None, str | None]:
+    """Create the payment session on the YouPI-PG gateway (server-side).
+
+    The browser SDK refuses to open a modal unless the payment was created on
+    the server with trusted order data, so the session is created here through
+    the checkout portal's ``/api/*`` proxy. Returns ``(session, None)`` on
+    success or ``(None, gateway_error_code)`` on any failure; callers must fail
+    closed — no coupon burn and no pending Payment row on failure.
+    """
+    from app.core.config import settings
+
+    domain = (settings.YOUPI_API_DOMAIN or "").rstrip("/")
+    merchant_id = (settings.YOUPI_MERCHANT_ID or "").strip()
+    merchant_key = (
+        settings.YOUPI_MERCHANT_API_KEY.get_secret_value()
+        if settings.YOUPI_MERCHANT_API_KEY
+        else (
+            settings.YOUPI_WEBHOOK_SECRET.get_secret_value()
+            if settings.YOUPI_WEBHOOK_SECRET
+            else ""
+        )
+    )
+    payload = {
+        "orderId": order_id,
+        "amount": f"{amount:.2f}",
+        "currency": (currency or "INR").upper(),
+        "metadata": {
+            "plan_id": str(plan.id),
+            "plan_name": plan.name,
+            "source": "cyberverse",
+        },
+    }
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=8.0)) as client:
+            resp = await client.post(
+                f"{domain}/api/v1/payments",
+                json=payload,
+                headers={"X-Merchant-Id": merchant_id, "X-Merchant-Key": merchant_key},
+            )
+    except httpx.HTTPError as exc:
+        logger.warning(
+            "YouPI gateway unreachable while creating %s (%s)", order_id, type(exc).__name__
+        )
+        return None, "GATEWAY_UNREACHABLE"
+
+    if resp.status_code >= 400:
+        # Log only the error code — never the merchant key or response body.
+        code = f"HTTP_{resp.status_code}"
+        try:
+            body = resp.json()
+            if isinstance(body, dict) and body.get("code"):
+                code = str(body["code"])
+        except ValueError:
+            pass
+        logger.warning("YouPI gateway rejected session %s: %s", order_id, code)
+        return None, code
+
+    try:
+        session = resp.json()
+    except ValueError:
+        logger.warning("YouPI gateway returned a non-JSON body for %s", order_id)
+        return None, "BAD_GATEWAY_RESPONSE"
+    if not isinstance(session, dict) or not session.get("paymentId"):
+        logger.warning("YouPI gateway returned no paymentId for %s", order_id)
+        return None, "NO_PAYMENT_ID"
+    return session, None
 
 
 class CheckoutRequest(BaseModel):
@@ -169,7 +244,12 @@ async def checkout(
     from app.core.config import settings
     from app.models.premium import PaymentStatus
 
-    youpi_configured = bool(settings.YOUPI_API_DOMAIN and settings.YOUPI_MERCHANT_PUBLIC_KEY)
+    youpi_configured = bool(
+        settings.YOUPI_API_DOMAIN
+        and settings.YOUPI_MERCHANT_PUBLIC_KEY
+        and settings.YOUPI_MERCHANT_ID
+        and (settings.YOUPI_MERCHANT_API_KEY or settings.YOUPI_WEBHOOK_SECRET)
+    )
     plan_currency = (plan.price_currency or "").upper()
     currency_ok = plan_currency == (settings.YOUPI_CURRENCY or "INR").upper()
     unavailable_reason: str | None = None
@@ -208,10 +288,32 @@ async def checkout(
             }
         )
 
+    # Fail closed BEFORE any DB writes: without a gateway session the browser
+    # SDK cannot open a modal, so burning the coupon or creating a pending
+    # Payment row would only leave garbage behind on every failed attempt.
+    order_id = f"CV-{secrets.token_hex(8)}"
+    session, session_error = await _create_youpi_session(
+        order_id,
+        amount=final_amount,
+        currency=plan_currency,
+        plan=plan,
+    )
+    if session_error is not None:
+        return APIResponse[dict](
+            data={
+                "youpi_enabled": False,
+                "youpi_unavailable_reason": "session_creation_failed",
+                "gateway_code": session_error,
+                "pay_domain": None,
+                "merchant_public_key": None,
+                "order_id": None,
+                **base_payload,
+            }
+        )
+
     if coupon is not None:
         coupon.used_count += 1
 
-    order_id = f"CV-{secrets.token_hex(8)}"
     plan_tier = str(plan.tier.value if hasattr(plan.tier, "value") else plan.tier).lower()
     payment = Payment(
         user_id=user.id,
@@ -228,6 +330,7 @@ async def checkout(
             "plan_tier": plan_tier,
             "coupon_code": (request.coupon_code or "").upper() or None,
             "discount_applied": discount > 0,
+            "youpi_payment_id": session["paymentId"],
         },
     )
     db.add(payment)
@@ -239,6 +342,8 @@ async def checkout(
             "pay_domain": (settings.YOUPI_API_DOMAIN or "").rstrip("/"),
             "merchant_public_key": settings.YOUPI_MERCHANT_PUBLIC_KEY,
             "order_id": order_id,
+            "payment_id": session["paymentId"],
+            "checkout_url": session.get("checkoutUrl"),
             **base_payload,
         }
     )

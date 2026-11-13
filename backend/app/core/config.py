@@ -293,6 +293,11 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------
     YOUPI_API_DOMAIN: str | None = None
     YOUPI_MERCHANT_PUBLIC_KEY: str | None = None
+    # Server-side credentials for creating checkout sessions on the gateway.
+    # YOUPI_MERCHANT_API_KEY is optional: the gateway accepts the merchant's
+    # webhook secret as its API key, so staging reuses YOUPI_WEBHOOK_SECRET.
+    YOUPI_MERCHANT_ID: str | None = None
+    YOUPI_MERCHANT_API_KEY: SecretStr | None = None
     YOUPI_WEBHOOK_SECRET: SecretStr | None = None
     YOUPI_CURRENCY: str = Field(default="INR")
     BILLING_TRIAL_DAYS: int = Field(default=7, ge=0, le=30)
