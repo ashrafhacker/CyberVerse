@@ -109,6 +109,15 @@ body {
   .animate-stagger-in > *:nth-child(5) { animation-delay: 0.44s; }
   .animate-stagger-in > *:nth-child(6) { animation-delay: 0.52s; }
   
+  @keyframes pageFade {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+
+  .page-fade {
+    animation: pageFade 0.5s ease-out forwards;
+  }
+
   .animate-fade-in {
     animation: fadeIn 0.4s ease-out forwards;
   }

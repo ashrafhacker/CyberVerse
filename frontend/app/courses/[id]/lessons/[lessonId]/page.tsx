@@ -466,22 +466,160 @@ function BlockedContentNotice({ id, message }: { id: string; message: string }) 
 }
 
 // ─── PDF Viewer ───────────────────────────────────────────────────────────────
+// Textbook-style reading shell: a brief book-cover intro opens the reading
+// room, then the content renders as a warm ivory "paper" page with a stacked
+// top sheet, serif chapter heading under a mono running head, and a
+// page-number footer with prev/next + go-to-page navigation. Page changes use
+// the iframe `#page=` fragment (Chrome built-in PDF viewer); Google Drive
+// previews navigate inside their own frame. Left/Right arrow keys turn pages.
 function PdfViewer({ src, title }: { src: string; title: string }) {
-  return (
-    <div className="w-full rounded-lg overflow-hidden border border-cyber-border">
-      <div className="flex items-center justify-between px-4 py-2 bg-cyber-surface border-b border-cyber-border">
-        <div className="flex items-center gap-2">
-          <FileText className="h-4 w-4 text-cyber-secondary" />
-          <span className="text-sm font-medium text-cyber-text truncate max-w-sm">{title}</span>
+  const isGdrive = src.startsWith('gdrive://');
+  const fileId = isGdrive ? src.replace('gdrive://', '') : '';
+  const [page, setPage] = useState(1);
+  const [coverOpen, setCoverOpen] = useState(true);
+  const [draft, setDraft] = useState('');
+  const frameRef = useRef<HTMLDivElement>(null);
+
+  const gdriveSrc = fileId ? `https://drive.google.com/file/d/${fileId}/preview` : '';
+  const pdfSrc = isGdrive ? gdriveSrc : `${src}#page=${page}&view=FitW&toolbar=0&navpanes=0`;
+
+  const goTo = (p: number) => {
+    if (!Number.isFinite(p)) return;
+    setPage(Math.max(1, Math.floor(p)));
+    setDraft('');
+  };
+  const prev = () => setPage((p) => Math.max(1, p - 1));
+  const next = () => setPage((p) => p + 1);
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    // Don't hijack arrow keys while the user is typing a page number.
+    const tag = (e.target as HTMLElement)?.tagName;
+    if (tag === 'INPUT') return;
+    if (e.key === 'ArrowRight') { e.preventDefault(); next(); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+  };
+
+  useEffect(() => {
+    frameRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Book cover intro ─────────────────────────────────────────────────────
+  if (coverOpen) {
+    return (
+      <div className="relative mx-auto w-full max-w-3xl">
+        <div className="relative flex min-h-[420px] flex-col items-center justify-center overflow-hidden rounded-xl border border-cyber-border bg-gradient-to-br from-[#131a3a] via-cyber-surface to-cyber-bg px-6 py-10 text-center shadow-[0_30px_80px_-20px_rgba(0,0,0,0.8)]">
+          {/* Double decorative frame */}
+          <div aria-hidden className="pointer-events-none absolute inset-3 rounded-lg border border-cyber-primary/25" />
+          <div aria-hidden className="pointer-events-none absolute inset-4 rounded-md border border-cyber-primary/10" />
+          <BookOpen className="relative h-10 w-10 text-cyber-primary" />
+          <p className="relative mt-5 font-mono text-[9px] uppercase tracking-[0.4em] text-cyber-primary/80">
+            CyberVerse · Academy
+          </p>
+          <h2 className="relative mt-3 max-w-md font-serif text-3xl leading-tight text-cyber-text">
+            {title}
+          </h2>
+          <p className="relative mt-3 font-mono text-[10px] uppercase tracking-[0.25em] text-cyber-muted">
+            {isGdrive ? 'PDF Module · Google Drive Preview' : 'PDF Module · Interactive Reading'}
+          </p>
+          <button
+            onClick={() => setCoverOpen(false)}
+            className="relative mt-8 inline-flex items-center gap-2 rounded-md bg-cyber-primary px-6 py-3 font-mono text-xs font-bold uppercase tracking-[0.25em] text-[#04151a] transition-all hover:bg-cyber-primary/90 hover:shadow-[0_0_24px_rgba(0,229,255,0.35)]"
+          >
+            Begin Reading <ChevronRight className="h-4 w-4" />
+          </button>
         </div>
-        <span className="text-xs text-cyber-muted">View only</span>
       </div>
-      <iframe
-        src={`${src}#toolbar=0&navpanes=0&view=FitH`}
-        className="w-full h-[75vh]"
-        title={title}
-        onContextMenu={(e) => e.preventDefault()}
-      />
+    );
+  }
+
+  // ── Textbook reading room ─────────────────────────────────────────────────
+  return (
+    <div className="relative mx-auto w-full max-w-3xl">
+      <div
+        ref={frameRef}
+        tabIndex={0}
+        onKeyDown={onKeyDown}
+        role="region"
+        aria-label={`PDF reader: ${title}`}
+        className="relative overflow-hidden rounded-xl bg-[#f7f3ea] shadow-[0_30px_80px_-20px_rgba(0,0,0,0.8)] ring-1 ring-black/40 outline-none focus-visible:ring-2 focus-visible:ring-cyber-primary/70"
+      >
+        {/* Stacked top sheet edge */}
+        <div className="h-3 rounded-t-xl bg-gradient-to-b from-[#e7e0cd] to-[#d9d0ba]" />
+
+        {/* Mono running head */}
+        <div className="flex items-center justify-between border-b border-[#e5ddc9] px-6 py-1.5">
+          <span className="font-mono text-[9px] uppercase tracking-[0.28em] text-[#8a8171]">CyberVerse</span>
+          <span className="font-mono text-[9px] uppercase tracking-[0.28em] text-[#8a8171]">Reading Room</span>
+          <span className="font-mono text-[9px] uppercase tracking-[0.28em] text-[#8a8171]">Lesson</span>
+        </div>
+
+        {/* Serif chapter heading */}
+        <div className="flex items-end justify-between gap-4 border-b-2 border-[#cdbb9e] px-6 pb-3 pt-4">
+          <div className="min-w-0">
+            <p className="mb-1 font-mono text-[9px] uppercase tracking-[0.3em] text-[#a5937a]">Chapter · PDF Reader</p>
+            <h2 className="truncate font-serif text-2xl leading-tight text-[#1c1917]">{title}</h2>
+          </div>
+          <BookOpen className="mb-1 h-6 w-6 shrink-0 text-[#a5937a]" />
+        </div>
+
+        {/* Page body */}
+        <div className="relative bg-[#f7f3ea]">
+          <iframe
+            src={pdfSrc}
+            className="h-[58vh] min-h-[320px] w-full bg-[#f7f3ea]"
+            title={title}
+            onContextMenu={(e) => e.preventDefault()}
+          />
+          {/* Gutter shadow (spine side) */}
+          <div aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-black/[0.10] to-transparent" />
+          {/* Page-fade replays on each page turn (iframe stays, no re-fetch) */}
+          {!isGdrive && (
+            <div key={page} aria-hidden className="page-fade pointer-events-none absolute inset-0 bg-[#f7f3ea]" />
+          )}
+        </div>
+
+        {/* Footer: page navigation */}
+        {isGdrive ? (
+          <div className="flex items-center justify-between border-t border-[#e5ddc9] bg-[#fbf8ef] px-6 py-2">
+            <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-[#8a8171]">Google Drive preview</span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-[#8a8171]">View only</span>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-3 border-t border-[#e5ddc9] bg-[#fbf8ef] px-4 py-2 sm:px-6">
+            <button
+              onClick={prev}
+              disabled={page <= 1}
+              aria-label="Previous page"
+              className="inline-flex items-center gap-1.5 rounded-md border border-[#d8cfb8] bg-[#fbf8ef] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#1c1917] transition-colors hover:bg-[#efe9d8] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" /> Prev
+            </button>
+            <div className="flex items-center gap-2">
+              <span className="hidden font-mono text-[10px] uppercase tracking-[0.3em] text-[#8a8171] xs:inline">Page</span>
+              <input
+                type="number"
+                min={1}
+                value={draft}
+                placeholder={String(page)}
+                onFocus={() => setDraft(String(page))}
+                onBlur={() => setDraft('')}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') goTo(Number(draft)); }}
+                aria-label="Go to page"
+                className="w-12 rounded border border-[#d8cfb8] bg-white px-1.5 py-1 text-center font-mono text-[11px] text-[#1c1917] outline-none focus:border-[#a5937a]"
+              />
+            </div>
+            <button
+              onClick={next}
+              aria-label="Next page"
+              className="inline-flex items-center gap-1.5 rounded-md border border-[#d8cfb8] bg-[#fbf8ef] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#1c1917] transition-colors hover:bg-[#efe9d8]"
+            >
+              Next <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -841,7 +979,7 @@ export default function LessonPlayerPage() {
                   </div>
                 )
               ) : (
-                <PdfViewer src={assetUrl} title={lesson.title} />
+                <PdfViewer key={lesson.id} src={assetUrl} title={lesson.title} />
               )}
             </div>
 
